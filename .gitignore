@@ -1,0 +1,10 @@
+_build/
+.lia.cache
+*.vo
+*.vos
+*.vok
+*.glob
+*.aux
+extracted/ccont_core.ml
+ccont.opam
+

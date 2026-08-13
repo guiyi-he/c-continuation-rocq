@@ -1,0 +1,17 @@
+{
+  "files.exclude": {
+    "**/*.vo": true,
+    "**/*.vos": true,
+    "**/*.vok": true,
+    "**/*.glob": true,
+    "**/.*.aux": true,
+    "**/.*.cache": true,
+    "**/.*.d": true,
+    "**/.lia.cache": true,
+    "**/.Makefile.coq.d": true,
+    "**/.Makefile.d": true,
+    "**/Makefile.conf": true,
+    "**/Makefile.coq": true,
+    "**/Makefile.coq.conf": true
+  }
+}

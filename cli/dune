@@ -1,0 +1,23 @@
+(rule
+ (targets ccont_core.ml)
+ (deps ../extracted/ccont_core.ml)
+ (action (copy %{deps} %{targets})))
+
+(library
+ (name ccont_verified)
+ (wrapped false)
+ (modules ccont_core)
+ (flags (:standard -w -32-39)))
+
+(executable
+ (name ccont)
+ (public_name ccont)
+ (modules ccont)
+ (libraries ccont_verified)
+ (flags (:standard -w -32-39)))
+
+(executable
+ (name core_tests)
+ (modules core_tests)
+ (libraries ccont_verified)
+ (flags (:standard -w -32-39)))
