@@ -1,4 +1,5 @@
 -Q theories CCont
+theories/StringConstraints.v
 theories/Syntax.v
 theories/Automaton.v
 theories/Construction.v

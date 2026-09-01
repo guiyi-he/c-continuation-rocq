@@ -3,6 +3,7 @@ ROCQ=rocq compile -Q theories CCont
 .PHONY: all cli test clean
 
 all:
+	$(ROCQ) theories/StringConstraints.v
 	$(ROCQ) theories/Syntax.v
 	$(ROCQ) theories/Automaton.v
 	$(ROCQ) theories/Construction.v
@@ -27,4 +28,4 @@ test: cli
 
 clean:
 	opam exec -- dune clean
-	rocq clean -Q theories CCont theories/Syntax.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v
+	rocq clean -Q theories CCont theories/StringConstraints.v theories/Syntax.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v

@@ -4,6 +4,13 @@ This project implements Definition 7 and the quotient construction from
 Champarnaud and Ziadi, *Canonical derivatives, partial derivatives and finite
 automaton constructions* (TCS 289, 2002).
 
+It also mechanizes Section 3.1 of `ICFP_2027_Version.pdf`: constrained-word
+pairs, executable prefix quotient/join and partial concatenation, constraint
+preservation, definedness, least residuals, pair associativity, and the
+idempotent-semiring laws for languages of constrained words.  The Rocq comments
+in `theories/StringConstraints.v` map each definition and proof paragraph back
+to the corresponding PDF page, source-line range, and equation or proposition.
+
 Requirements: Rocq 9.0, OCaml 4.14, Dune 3.x, and GNU Make.
 
 ```sh
@@ -27,7 +34,16 @@ The trusted Rocq core is generic over a decidable alphabet. The extracted CLI
 specializes symbols to character codes. Parsing, diagnostics, and rendering are
 ordinary OCaml and are intentionally outside the verified boundary.
 
-The development proves linearization/erasure preservation, exact agreement of
+The string-constraint results are constructive and executable: partial
+operations return `option`, while language equality is pointwise logical
+equivalence.  The principal checked results are
+`constraint_concat_preservation`,
+`constraint_concat_defined_iff_residual`,
+`constraint_concat_least_residual`, `constraint_concat_assoc`, and
+`constraint_languages_idempotent_semiring`.
+
+The continuation-automaton development proves linearization/erasure
+preservation, exact agreement of
 the executable transition test with Definition 7, equivalence-relation laws and
 right invariance for the quotient, the exact CE state count, and the quotient
 state bound. In particular, `build_ce_correct` and `build_quotient_correct`
