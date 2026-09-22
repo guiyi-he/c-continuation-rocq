@@ -7,4 +7,4 @@ _build/
 *.aux
 extracted/ccont_core.ml
 ccont.opam
-
+paper/

@@ -5,36 +5,37 @@ Set Implicit Arguments.
 
 (** * Languages with string constraints
 
-    This file formalizes Section 3.1 of [ICFP_2027_Version.pdf].  References
+    This file formalizes Section 3.2 of [ICFP_2027_Version.pdf].  References
     below use the red source-line numbers printed in that draft.
 
     Paper-to-code map:
 
-    - p.4, lines 162--165: [word], [string_constraint],
+    - p.4, lines 175--179: [word], [string_constraint],
       [constraint_language], and [constraint_projection].
-    - p.4, lines 166--170: [word_prefix], [prefix_compatible],
+    - p.4, lines 180--182: [word_prefix], [prefix_compatible],
       [left_quotient], its uniqueness theorem, and the executable examples.
-    - p.4, lines 171--177, Eq. (7): [join] and [residual].
-    - p.4, lines 178--181, Eq. (8): [constraint_concat].
-    - p.4, lines 182--190, Proposition 1: [constraint_concat_preservation].
-    - pp.4--5, lines 192--203, Lemma 1:
+    - p.4, lines 183--190, Eq. (4): [join] and [residual].
+    - p.4, lines 191--195, Eq. (5): [constraint_concat].
+    - pp.4--5, lines 195--202, Proposition 1: [constraint_concat_preservation].
+    - p.5, lines 204--212, Lemma 1:
       [constraint_concat_defined_iff_residual] and
       [constraint_concat_defined_iff_compatible].
-    - p.5, lines 204--215, Proposition 2:
+    - p.5, lines 214--225, Proposition 2:
       [constraint_concat_least_residual].
-    - p.5, lines 216--219, Remark 1:
+    - p.5, lines 226--229, Remark 1:
       [constraint_concat_characterization].
-    - pp.5--6, lines 221--249, Proposition 3:
+    - pp.5--6, lines 231--260, Proposition 3, Eq. (6):
       [constraint_concat_assoc_graph] and [constraint_concat_assoc].
-    - p.6, lines 251--258, Eq. (12): [lang_union], [lang_concat],
+    - p.6, lines 261--268, Eq. (7): [lang_union], [lang_concat],
       [lang_zero], [lang_one], [positive_lookahead], [lang_power], and
       [lang_star].
-    - p.6, lines 259--269, Proposition 4:
+    - p.6, lines 269--272, Eq. (8): [main_language], [constr_language].
+    - p.6, lines 273--280, Proposition 4:
       [constraint_languages_idempotent_semiring].
-    - p.6, lines 271--272: [rational_constraint_language].
+    - p.6, lines 281--287: [rational_constraint_language].
  *)
 
-(** Paper section 3.1, p.4, lines 162--165: strings, constrained pairs,
+(** Paper Section 3.2, p.4, lines 175--179: strings, constrained pairs,
     their full language domain, and "pi(u,v) = uv". *)
 Definition word (A : Type) := list A.
 Definition string_constraint (A : Type) := (word A * word A)%type.
@@ -43,7 +44,13 @@ Definition constraint_language (A : Type) := string_constraint A -> Prop.
 Definition constraint_projection {A} (p : string_constraint A) : word A :=
   fst p ++ snd p.
 
-(** Paper section 3.1, p.4, lines 166--170: "u is a prefix of v" and
+(** Paper Section 3.2, p.4, lines 175--179: the two component projections
+    [pi_1] and [pi_2].  Keeping them named makes later quotient statements
+    read like the paper rather than exposing pair implementation details. *)
+Definition constraint_main {A} (p : string_constraint A) : word A := fst p.
+Definition constraint_context {A} (p : string_constraint A) : word A := snd p.
+
+(** Paper Section 3.2, p.4, lines 180--182: "u is a prefix of v" and
     prefix compatibility. *)
 Definition word_prefix {A} (u v : word A) : Prop :=
   exists z, v = u ++ z.
@@ -109,7 +116,7 @@ Section ExecutableWords.
 Context {A : Type} (eqb : A -> A -> bool).
 Hypothesis eqb_spec : forall x y, eqb x y = true <-> x = y.
 
-(** Paper section 3.1, p.4, lines 168--170: executable [u^-1 v]. *)
+(** Paper Section 3.2, p.4, lines 180--182: executable [u^-1 v]. *)
 Fixpoint left_quotient (u v : word A) : option (word A) :=
   match u, v with
   | [], _ => Some v
@@ -142,12 +149,12 @@ Proof.
   - intros [z Hz]. exists z. now apply left_quotient_spec.
 Qed.
 
-(** The free-monoid quotient is unique (p.4, line 169). *)
+(** The free-monoid quotient is unique (p.4, line 181). *)
 Lemma left_quotient_unique u v x y :
   left_quotient u v = Some x -> left_quotient u v = Some y -> x = y.
 Proof. congruence. Qed.
 
-(** Paper Eq. (7), p.4, lines 171--177: [join] returns the longer of two
+(** Paper Eq. (4), p.4, lines 183--190: [join] returns the longer of two
     compatible words.  It is [None] exactly for incompatible words. *)
 Definition join (u v : word A) : option (word A) :=
   match left_quotient u v with
@@ -159,7 +166,7 @@ Definition join (u v : word A) : option (word A) :=
       end
   end.
 
-(** Paper Eq. (7): [v/u] is [u^-1 v] when [u] is a prefix of [v], and the
+(** Paper Eq. (4): [v/u] is [u^-1 v] when [u] is a prefix of [v], and the
     empty word otherwise. *)
 Definition residual (v u : word A) : word A :=
   match left_quotient u v with
@@ -291,7 +298,7 @@ Proof.
     now apply word_prefix_app_left.
 Qed.
 
-(** Paper Eq. (8), p.4, lines 178--181: partial concatenation of constrained
+(** Paper Eq. (5), p.4, lines 191--195: partial concatenation of constrained
     pairs.  The first [join] is the definedness test [v compatible u'v']; the
     second computes [(v/u') join v']. *)
 Definition constraint_concat
@@ -333,7 +340,7 @@ Proof.
   unfold constraint_concat. simpl. now rewrite Houter, Ht.
 Qed.
 
-(** Proposition 1 (Constraint preservation), p.4, lines 182--190, Eq. (9). *)
+(** Proposition 1 (Constraint preservation), pp.4--5, lines 195--202. *)
 Theorem constraint_concat_preservation u v u' v' t :
   constraint_concat (u, v) (u', v') = Some (u ++ u', t) ->
   word_prefix v (u' ++ t) /\ word_prefix v' t.
@@ -347,15 +354,15 @@ Proof.
   { apply join_result in Houter.
     destruct Houter as [[Hp _]|[Hp _]]; [left|right]; exact Hp. }
   split.
-  - (* Paper p.4, lines 185--190: the two cases [v <= u'] and [u' <= v]
+  - (* Paper pp.4--5, lines 197--202: the two cases [v <= u'] and [u' <= v]
        are encapsulated by [residual_preserves_constraint]. *)
     eapply residual_preserves_constraint; [exact Hcompat|].
     exact (join_upper_left (residual v u') v' Hresult).
-  - (* Paper p.4, lines 187--190: the join preserves the right operand. *)
+  - (* Paper pp.4--5, lines 199--202: the join preserves the right operand. *)
     exact (join_upper_right (residual v u') v' Hresult).
 Qed.
 
-(** Lemma 1, p.4--5, lines 192--203: definedness is exactly prefix
+(** Lemma 1, p.5, lines 204--212: definedness is exactly prefix
     compatibility. *)
 Theorem constraint_concat_defined_iff_compatible u v u' v' :
   (exists t, constraint_concat (u, v) (u', v') = Some (u ++ u', t)) <->
@@ -369,7 +376,7 @@ Proof.
   - apply constraint_concat_defined_from_compatible.
 Qed.
 
-(** Lemma 1, p.4--5, lines 192--203, Eq. (10): the existential residual
+(** Lemma 1, p.5, lines 204--212: the existential residual
     formulation of definedness. *)
 Theorem constraint_concat_defined_iff_residual u v u' v' :
   (exists out, constraint_concat (u, v) (u', v') = Some (u ++ u', out)) <->
@@ -378,8 +385,8 @@ Proof.
   split.
   - intros [t Ht]. exists t.
     exact (constraint_concat_preservation u v u' v' Ht).
-  - (* Paper p.5, lines 199--203: both constraints are prefixes of [u't],
-       hence are compatible and Eq. (8) is defined. *)
+  - (* Paper p.5, lines 208--212: both constraints are prefixes of [u't],
+       hence are compatible and Eq. (5) is defined. *)
     intros [t [Hv Hv']]. apply constraint_concat_defined_from_compatible.
     eapply word_prefix_common_upper; [exact Hv|].
     now apply word_prefix_app_left.
@@ -394,13 +401,13 @@ Definition least_residual
   residual_requirements v u' v' t /\
   forall s, residual_requirements v u' v' s -> word_prefix t s.
 
-(** Proposition 2 (Least residual constraint), p.5, lines 204--215. *)
+(** Proposition 2 (Least residual constraint), p.5, lines 214--225. *)
 Theorem constraint_concat_least_residual u v u' v' t :
   constraint_concat (u, v) (u', v') = Some (u ++ u', t) ->
   least_residual v u' v' t.
 Proof.
   intro Hconcat. split.
-  - (* Paper p.5, lines 207--208: Proposition 1 supplies the requirements. *)
+  - (* Paper p.5, lines 217--218: Proposition 1 supplies the requirements. *)
     now apply constraint_concat_preservation in Hconcat.
   - intros s [Hvs Hv's].
     unfold constraint_concat in Hconcat. simpl in Hconcat.
@@ -408,12 +415,12 @@ Proof.
     destruct (join (residual v u') v') as [result|] eqn:Hresult;
       [|discriminate].
     inversion Hconcat; subst result.
-    (* Paper p.5, lines 209--213: [residual_least] covers the two quotient
+    (* Paper p.5, lines 219--223: [residual_least] covers the two quotient
        cases; the join is the least common prefix upper bound. *)
     eapply join_least; [exact Hresult|now apply residual_least|exact Hv's].
 Qed.
 
-(** Remark 1, p.5, lines 216--219: preservation plus leastness completely
+(** Remark 1, p.5, lines 226--229: preservation plus leastness completely
     characterizes the residual returned by pair concatenation. *)
 Theorem constraint_concat_characterization u v u' v' t :
   constraint_concat (u, v) (u', v') = Some (u ++ u', t) <->
@@ -439,7 +446,7 @@ Qed.
 Definition option_bind {X Y} (o : option X) (f : X -> option Y) : option Y :=
   match o with Some x => f x | None => None end.
 
-(** Paper Proposition 3, p.5, lines 225--228: the set [T] of common triple
+(** Paper Proposition 3, p.5, lines 235--239: the set [T] of common triple
     residuals. *)
 Definition triple_requirements
   (v u' v' u'' v'' t : word A) : Prop :=
@@ -459,7 +466,7 @@ Lemma left_assoc_characterization u v u' v' u'' v'' t :
   least_triple_residual v u' v' u'' v'' t.
 Proof.
   split.
-  - (* Paper p.5, lines 229--238: the left-associated result is defined
+  - (* Paper pp.5--6, lines 240--250: the left-associated result is defined
        exactly when [T] is inhabited and is its least element. *)
     unfold option_bind.
     destruct (constraint_concat (u, v) (u', v')) as [pq|] eqn:Hpq;
@@ -483,7 +490,7 @@ Proof.
       { apply Hleast1. split; [|exact Hv's].
         exact Hvs. }
       apply Hleast2. now split.
-  - (* Paper p.5, lines 232--238: an element of [T] first defines the inner
+  - (* Paper pp.5--6, lines 243--250: an element of [T] first defines the inner
        concatenation, then the outer one; mutual leastness fixes the result. *)
     intros [Hreq Hleast]. destruct Hreq as [Hvt [Hv't Hv''t]].
     assert (Hex1 : exists t1,
@@ -526,7 +533,7 @@ Lemma right_assoc_characterization u v u' v' u'' v'' t :
   least_triple_residual v u' v' u'' v'' t.
 Proof.
   split.
-  - (* Paper p.5, lines 239--244: the right-associated result is governed
+  - (* Paper p.6, lines 251--260: the right-associated result is governed
        by the same set [T]. *)
     unfold option_bind.
     destruct (constraint_concat (u', v') (u'', v'')) as [qr|] eqn:Hqr;
@@ -549,7 +556,7 @@ Proof.
       assert (word_prefix t2 s) as Ht2s.
       { apply Hleast2. now split. }
       apply Hleast3. split; [rewrite app_assoc in Hvs; exact Hvs|exact Ht2s].
-  - (* Paper p.5--6, lines 242--249: leastness on the inner right pair and
+  - (* Paper p.6, lines 253--260: leastness on the inner right pair and
        then on the outer pair yields the same least member of [T]. *)
     intros [Hreq Hleast]. destruct Hreq as [Hvt [Hv't Hv''t]].
     assert (Hex1 : exists t2,
@@ -586,7 +593,7 @@ Proof.
     unfold option_bind. now rewrite Ht2.
 Qed.
 
-(** Proposition 3 (Associativity), pp.5--6, lines 221--249, Eq. (11), in
+(** Proposition 3 (Associativity), pp.5--6, lines 231--260, Eq. (6), in
     graph form. *)
 Theorem constraint_concat_assoc_graph p q r out :
   (exists pq,
@@ -635,7 +642,7 @@ Proof.
     exact Hleft.
 Qed.
 
-(** Proposition 3, Eq. (11), as equality of partial computations.  Equality
+(** Proposition 3, Eq. (6), as equality of partial computations.  Equality
     of options simultaneously states equal definedness and equal results. *)
 Theorem constraint_concat_assoc p q r :
   option_bind (constraint_concat p q) (fun pq => constraint_concat pq r) =
@@ -687,40 +694,76 @@ Qed.
 
 End ExecutableWords.
 
-(** Paper p.6, lines 251--254: languages are predicates over constrained
+(** Paper p.6, lines 261--265: languages are predicates over constrained
     pairs.  Extensional equivalence avoids any function-extensionality axiom. *)
 Definition lang_equiv {A} (R S : constraint_language A) : Prop :=
   forall p, R p <-> S p.
 
-(** Paper Eq. (12), p.6, lines 251--254: language addition is set union. *)
+(** Paper Eq. (7), p.6, lines 261--265: language addition is set union. *)
 Definition lang_union {A} (R S : constraint_language A)
   : constraint_language A :=
   fun p => R p \/ S p.
 
-(** Paper p.6, line 256: [0] is empty and [1] contains only the empty pair. *)
+Definition lang_intersection {A} (R S : constraint_language A)
+  : constraint_language A :=
+  fun p => R p /\ S p.
+
+(** Paper p.6, line 266: [0] is empty and [1] contains only the empty pair. *)
 Definition lang_zero {A} : constraint_language A := fun _ => False.
 
 Definition lang_one {A} : constraint_language A :=
   fun p => p = ([], []).
 
-(** Paper p.6, lines 256--258: "its positive lookahead" moves the projection
+(** Paper p.6, lines 266--268: "its positive lookahead" moves the projection
     of each pair into the constraint component. *)
 Definition positive_lookahead {A} (R : constraint_language A)
   : constraint_language A :=
   fun p => exists q, R q /\ p = ([], constraint_projection q).
 
+(** Paper Section 3.2, p.6, lines 269--272, Eq. (8). *)
+Definition main_language {A} (R : constraint_language A)
+  : constraint_language A :=
+  fun p => constraint_main p <> [] /\ R p.
+
+Definition constr_language {A} (R : constraint_language A)
+  : constraint_language A :=
+  fun p => constraint_main p = [] /\ R p.
+
+(** Paper p.6, line 272: [R = Main(R) union Constr(R)]. *)
+Lemma main_constr_partition {A} (R : constraint_language A) :
+  lang_equiv R (lang_union (main_language R) (constr_language R)).
+Proof.
+  intros [u v]. destruct u as [|a u];
+    unfold lang_union, main_language, constr_language, constraint_main; simpl.
+  - split.
+    + intro HR. right. now split.
+    + intros [[H _]|[_ HR]]; [exfalso; now apply H|exact HR].
+  - split.
+    + intro HR. left. split; [discriminate|exact HR].
+    + intros [[_ HR]|[H _]]; [exact HR|discriminate].
+Qed.
+
+(** Paper p.6, line 272: [Main(R) intersection Constr(R) = empty]. *)
+Lemma main_constr_disjoint {A} (R : constraint_language A) :
+  lang_equiv (lang_intersection (main_language R) (constr_language R))
+    lang_zero.
+Proof.
+  intros p. unfold lang_intersection, main_language, constr_language,
+    lang_zero. tauto.
+Qed.
+
 Section ConstraintLanguages.
 Context {A : Type} (eqb : A -> A -> bool).
 Hypothesis eqb_spec : forall x y, eqb x y = true <-> x = y.
 
-(** Paper Eq. (12), p.6, lines 251--254: pointwise lifting of the partial
+(** Paper Eq. (7), p.6, lines 261--265: pointwise lifting of the partial
     pair concatenation. *)
 Definition lang_concat (R S : constraint_language A)
   : constraint_language A :=
   fun out => exists p q,
     R p /\ S q /\ constraint_concat eqb p q = Some out.
 
-(** Paper p.6, lines 256--258: powers and Kleene star induced by [lang_concat]. *)
+(** Paper p.6, lines 266--268: powers and Kleene star induced by [lang_concat]. *)
 Fixpoint lang_power (R : constraint_language A) (n : nat)
   : constraint_language A :=
   match n with
@@ -763,6 +806,22 @@ Proof.
     + apply (proj2 (HS q)). exact Hq.
 Qed.
 
+Lemma lang_power_compat (R S : constraint_language A) n :
+  lang_equiv R S -> lang_equiv (lang_power R n) (lang_power S n).
+Proof.
+  intro H. induction n; simpl.
+  - apply lang_equiv_refl.
+  - apply lang_concat_compat; assumption.
+Qed.
+
+Lemma lang_star_compat (R S : constraint_language A) :
+  lang_equiv R S -> lang_equiv (lang_star R) (lang_star S).
+Proof.
+  intros H p. unfold lang_star. split; intros [n Hn]; exists n.
+  - apply (proj1 (lang_power_compat (R:=R) (S:=S) n H p)). exact Hn.
+  - apply (proj2 (lang_power_compat (R:=R) (S:=S) n H p)). exact Hn.
+Qed.
+
 Lemma lang_union_assoc (R S T : constraint_language A) :
   lang_equiv (lang_union (lang_union R S) T)
     (lang_union R (lang_union S T)).
@@ -785,7 +844,7 @@ Lemma lang_union_zero_right (R : constraint_language A) :
 Proof. intros p; unfold lang_union, lang_zero; tauto. Qed.
 
 (** Proposition 3 lifted pointwise, as used in the proof of Proposition 4
-    (p.6, lines 264--265). *)
+    (p.6, lines 273--277). *)
 Lemma lang_concat_assoc (R S T : constraint_language A) :
   lang_equiv (lang_concat (lang_concat R S) T)
     (lang_concat R (lang_concat S T)).
@@ -805,7 +864,7 @@ Proof.
     exists p, q. repeat split; assumption.
 Qed.
 
-(** Proposition 4 proof, p.6, lines 265--266: singleton [(epsilon,epsilon)]
+(** Proposition 4 proof, p.6, lines 276--277: singleton [(epsilon,epsilon)]
     is a two-sided identity. *)
 Lemma lang_concat_one_left (R : constraint_language A) :
   lang_equiv (lang_concat lang_one R) R.
@@ -829,7 +888,7 @@ Proof.
     exact (constraint_concat_right_identity eqb eqb_spec out).
 Qed.
 
-(** Proposition 4 proof, p.6, lines 267--269: zero absorption. *)
+(** Proposition 4 proof, p.6, lines 278--279: zero absorption. *)
 Lemma lang_concat_zero_left (R : constraint_language A) :
   lang_equiv (lang_concat lang_zero R) lang_zero.
 Proof.
@@ -844,7 +903,7 @@ Proof.
   intros [p [q [_ [Hq _]]]]. contradiction.
 Qed.
 
-(** Proposition 4 proof, p.6, lines 267--268: pointwise distributivity. *)
+(** Proposition 4 proof, p.6, lines 278--279: pointwise distributivity. *)
 Lemma lang_concat_union_left (R S T : constraint_language A) :
   lang_equiv (lang_concat (lang_union R S) T)
     (lang_union (lang_concat R T) (lang_concat S T)).
@@ -897,7 +956,7 @@ Record idempotent_semiring_laws
     equiv (times x (plus y z)) (plus (times x y) (times x z))
 }.
 
-(** Proposition 4 (Idempotent semiring), p.6, lines 259--269, Eq. (13). *)
+(** Proposition 4 (Idempotent semiring), p.6, lines 273--280. *)
 Theorem constraint_languages_idempotent_semiring :
   @idempotent_semiring_laws
     (constraint_language A) lang_equiv lang_union lang_concat lang_zero lang_one.
@@ -922,7 +981,7 @@ Proof.
   - apply lang_concat_union_right.
 Qed.
 
-(** Paper p.6, lines 271--272: the regular fragment is the closure of a
+(** Paper p.6, lines 281--287: the regular fragment is the closure of a
     chosen family of basic constrained languages.  Section 3.1 does not fix
     that family, so it is an explicit parameter here. *)
 Inductive rational_constraint_language

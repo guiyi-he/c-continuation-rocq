@@ -1,6 +1,18 @@
 -Q theories CCont
 theories/StringConstraints.v
 theories/Syntax.v
+theories/OrdinaryDerivatives.v
+theories/LookaheadSemantics.v
+theories/ConstraintExpansion.v
+theories/LookaheadDerivatives.v
+theories/PaperGuards.v
+theories/LookaheadDecision.v
+theories/SemanticDFA.v
+theories/DerivativeLowerBound.v
+theories/LowerBoundFamily.v
+theories/OrdinaryResiduals.v
+theories/PeriodicAutomaton.v
+theories/PeriodicDisplay.v
 theories/Automaton.v
 theories/Construction.v
 theories/Canonical.v
