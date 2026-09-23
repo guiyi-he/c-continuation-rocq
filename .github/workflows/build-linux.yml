@@ -1,0 +1,46 @@
+name: Build Linux ccont
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "4.14.2"
+
+      - name: Install dependencies
+        run: |
+          opam install -y rocq-prover.9.0.0 dune
+
+      - name: Build ccont
+        run: |
+          eval $(opam env)
+          make cli
+
+      - name: Check executable
+        run: |
+          file _build/default/cli/ccont.exe
+          ldd _build/default/cli/ccont.exe
+
+      - name: Prepare Linux binary
+        run: |
+          cp _build/default/cli/ccont.exe ccont-linux-x86_64
+          chmod +x ccont-linux-x86_64
+          file ccont-linux-x86_64
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ccont-linux-x86_64
+          path: ccont-linux-x86_64
