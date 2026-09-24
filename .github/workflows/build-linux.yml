@@ -6,41 +6,82 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-linux-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Linux x86-64 release binary
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up OCaml
+      - name: Set up OCaml 4.14.2
         uses: ocaml/setup-ocaml@v3
         with:
           ocaml-compiler: "4.14.2"
 
-      - name: Install dependencies
-        run: |
-          opam install -y rocq-prover.9.0.0 dune
+      - name: Install build dependencies
+        run: opam install -y rocq-prover.9.0.0 dune.3.10.0
 
-      - name: Build ccont
+      # The repository keeps a defensive 10,000-state stop in the interactive
+      # CLI.  The large REwPLA example can legitimately explore more states.
+      # Disable only that artificial stop in the release workspace; the source
+      # tree in the repository remains unchanged.
+      - name: Configure unbounded DFA exploration
+        shell: bash
         run: |
-          eval $(opam env)
-          make cli
+          set -euo pipefail
+          matches=$(grep -c 'if List.length !states >= 10000 then' cli/ccont.ml)
+          test "$matches" -eq 2
+          sed -i 's/if List.length !states >= 10000 then/if false then/g' cli/ccont.ml
+          ! grep -q 'if List.length !states >= 10000 then' cli/ccont.ml
 
-      - name: Check executable
+      - name: Check the Rocq development and extract the OCaml core
+        run: opam exec -- make
+
+      - name: Build optimized native executable
+        run: opam exec -- dune build --profile release cli/ccont.exe
+
+      - name: Prepare release archive
+        shell: bash
         run: |
-          file _build/default/cli/ccont.exe
-          ldd _build/default/cli/ccont.exe
+          set -euo pipefail
+          mkdir -p dist/package
+          install -m 0755 _build/default/cli/ccont.exe dist/package/ccont
+          file dist/package/ccont
+          ldd dist/package/ccont
+          tar -C dist/package -czf dist/ccont-linux-x86_64.tar.gz ccont
+          sha256sum dist/ccont-linux-x86_64.tar.gz > dist/ccont-linux-x86_64.tar.gz.sha256
 
-      - name: Prepare Linux binary
+      # Keep CI verification small.  The large expression is intended to run
+      # later on the user's server and is deliberately not evaluated here.
+      - name: Smoke-test packaged executable
+        shell: bash
         run: |
-          cp _build/default/cli/ccont.exe ccont-linux-x86_64
-          chmod +x ccont-linux-x86_64
-          file ccont-linux-x86_64
+          set -euo pipefail
+          dist/package/ccont \
+            --automaton rewpla \
+            --alphabet ab \
+            --format text \
+            -o dist/smoke-test.txt \
+            'LA(a)+a'
+          grep -q 'REwPLA derivative DFA' dist/smoke-test.txt
+          grep -q 'Transitions:' dist/smoke-test.txt
 
-      - name: Upload binary
+      - name: Upload Linux release
         uses: actions/upload-artifact@v4
         with:
           name: ccont-linux-x86_64
-          path: ccont-linux-x86_64
+          path: |
+            dist/ccont-linux-x86_64.tar.gz
+            dist/ccont-linux-x86_64.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
