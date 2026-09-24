@@ -81,6 +81,28 @@ let () =
   assert (rewpla_eqb_char
     (aci (rewpla_simplify_char (WPlus (WConcat (WEps, wa),
       WConcat (wa, WEps))))) (aci wa));
+  let positive = rewpla_positive_normalize_char in
+  let same_positive r s = rewpla_eqb_char (positive r) (positive s) in
+  let la = WLookahead wa and lb = WLookahead wb in
+  (* P1--P9: idempotent union, units, associativity and both
+     distributivity laws are reflected in the extracted key. *)
+  assert (same_positive (WPlus (wa, WPlus (wb, wa)))
+    (WPlus (wb, wa)));
+  assert (same_positive (WConcat (WPlus (wa, wb), WPlus (wa, wb)))
+    (WPlus (WPlus (WConcat (wa, wa), WConcat (wa, wb)),
+      WPlus (WConcat (wb, wa), WConcat (wb, wb)))));
+  assert (same_positive (WConcat (WConcat (WEps, wa), wb))
+    (WConcat (wa, WConcat (wb, WEps))));
+  assert (same_positive (WConcat (WPlus (wa, WZero), WZero)) WZero);
+  (* P10--P11 apply to adjacent positive logical factors only. *)
+  assert (same_positive (WConcat (WConcat (la, lb), la))
+    (WConcat (lb, la)));
+  assert (same_positive (WConcat (WPlus (la, lb), la))
+    (WPlus (la, WConcat (la, lb))));
+  assert (same_positive
+    (WConcat (WPlus (la, lb), WPlus (la, lb))) (WPlus (la, lb)));
+  assert (not (same_positive (WConcat (wa, wb)) (WConcat (wb, wa))));
+  assert (not (same_positive (WConcat (wa, wa)) wa));
   let alpha = [Char.code 'a'; Char.code 'b'; Char.code 'c'] in
   let one_a = WPlus (WLookahead wa, wa) in
   let guarded_ab = WPlus

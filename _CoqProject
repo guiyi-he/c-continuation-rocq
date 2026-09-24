@@ -7,6 +7,8 @@ theories/ConstraintExpansion.v
 theories/LookaheadDerivatives.v
 theories/PaperGuards.v
 theories/LookaheadDecision.v
+theories/PositiveCongruence.v
+theories/PositiveCongruenceNormalization.v
 theories/SemanticDFA.v
 theories/DerivativeLowerBound.v
 theories/LowerBoundFamily.v

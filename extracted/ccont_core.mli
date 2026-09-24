@@ -40,6 +40,8 @@ val hd : 'a1 -> 'a1 list -> 'a1
 
 val nth_error : 'a1 list -> int -> 'a1 option
 
+val flat_map : ('a1 -> 'a2 list) -> 'a1 list -> 'a2 list
+
 val fold_left : ('a1 -> 'a2 -> 'a1) -> 'a2 list -> 'a1 -> 'a1
 
 val fold_right : ('a2 -> 'a1 -> 'a1) -> 'a1 -> 'a2 list -> 'a1
@@ -404,6 +406,44 @@ module RequestedCorrespondence :
     bool list -> Mod15Example.bitvec -> bool rewpla
  end
 
+val positive_factorb : 'a1 rewpla -> bool
+
+val positive_insert_factor :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla -> 'a1 rewpla list ->
+  'a1 rewpla list
+
+val positive_word_normalize :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla list -> 'a1 rewpla list
+
+val positive_word_build : 'a1 rewpla list -> 'a1 rewpla
+
+val positive_sum_insert :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla -> 'a1 rewpla list ->
+  'a1 rewpla list
+
+val positive_sum_normalize :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla list -> 'a1 rewpla list
+
+val positive_sum_build :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla list list -> 'a1 rewpla
+
+val positive_logicalb : 'a1 rewpla -> bool
+
+val positive_dnf :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla -> 'a1 rewpla list list
+
+val rewpla_positive_normalize :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 rewpla -> 'a1 rewpla
+
+val rewpla_positive_symbol_step :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 -> 'a1 rewpla -> 'a1 rewpla
+
+val rewpla_positive_word_step :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 list -> 'a1 rewpla -> 'a1 rewpla
+
+val rewpla_positive_states_closedb :
+  ('a1 -> 'a1 -> bool) -> ('a1 -> int) -> 'a1 list -> 'a1 rewpla list -> bool
+
 module PeriodicAutomaton :
  sig
   val parameters_validb : int -> int list -> bool
@@ -507,6 +547,15 @@ val rewpla_derivation_word_display_char :
   char list -> rewpla_char -> int rewpla
 
 val rewpla_paper_states_closedb_char : char list -> rewpla_char list -> bool
+
+val rewpla_positive_normalize_char : rewpla_char -> int rewpla
+
+val rewpla_positive_symbol_step_char : char -> rewpla_char -> int rewpla
+
+val rewpla_positive_word_step_char : char list -> rewpla_char -> int rewpla
+
+val rewpla_positive_states_closedb_char :
+  char list -> rewpla_char list -> bool
 
 val periodic_zeros_char : int -> PeriodicFamily.bitvec
 

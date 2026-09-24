@@ -265,6 +265,36 @@ let rw_word_string w =
 let rw_finals id accepting states =
   List.filter_map (fun q -> if accepting q then Some (id q) else None) states
 
+type progress_reporter = {
+  progress_enabled : bool;
+  progress_interval : float;
+  progress_started : float;
+  mutable progress_last : float;
+}
+
+let make_progress_reporter enabled interval =
+  let now = Sys.time () in
+  { progress_enabled = enabled; progress_interval = interval;
+    progress_started = now; progress_last = now }
+
+let progress_emit reporter message =
+  if reporter.progress_enabled then begin
+    let now = Sys.time () in
+    reporter.progress_last <- now;
+    Printf.eprintf "[ccont +%.1fs] %s\n%!"
+      (now -. reporter.progress_started) message
+  end
+
+let progressf reporter fmt =
+  Printf.ksprintf (progress_emit reporter) fmt
+
+let progress_maybe reporter make_message =
+  if reporter.progress_enabled then begin
+    let now = Sys.time () in
+    if now -. reporter.progress_last >= reporter.progress_interval then
+      progress_emit reporter (make_message ())
+  end
+
 let render_rw_five_tuple out alphabet count finals =
   Printf.bprintf out "States: %d\nQ = {%s}\nSigma = {%s}\ndelta: Q x Sigma -> Q\nq0 = 0\nF = {%s}\nInitial: 0\nState details:\n"
     count
@@ -332,7 +362,7 @@ type periodic_rw_state = {
   pr_bits : bool list;
 }
 
-let build_periodic_states alpha family =
+let build_periodic_states progress alpha family =
   if not (periodic_parameters_validb_char family.pf_modulus family.pf_periods) then
     failwith "periodic parameters failed the verified common-modulus check";
   if family.pf_modulus > 4096 then
@@ -343,7 +373,11 @@ let build_periodic_states alpha family =
   let states = ref [{ pr_id = 0; pr_witness = []; pr_bits = zero }] in
   let pending = Queue.create () in
   Queue.add 0 pending;
+  let processed = ref 0 in
   let find bits = List.find_opt (fun q -> q.pr_bits = bits) !states in
+  progressf progress
+    "periodic exploration started (modulus=%d, alphabet=%d)"
+    family.pf_modulus (List.length alpha);
   while not (Queue.is_empty pending) do
     let id = Queue.take pending in
     let q = List.nth !states id in
@@ -358,15 +392,36 @@ let build_periodic_states alpha family =
                        pr_witness = q.pr_witness @ [a]; pr_bits = bits } in
           states := !states @ [next];
           Queue.add next.pr_id pending) alpha
+    ;
+    incr processed;
+    progress_maybe progress (fun () -> Printf.sprintf
+      "periodic exploration: processed=%d discovered=%d pending=%d"
+      !processed (List.length !states) (Queue.length pending))
   done;
-  if not (periodic_states_closedb_char family.pf_trigger base alpha
-    (List.map (fun q -> q.pr_bits) !states)) then
+  progressf progress "periodic exploration complete: states=%d transitions=%d"
+    (List.length !states) (List.length !states * List.length alpha);
+  progressf progress "checking periodic transition closure";
+  let values = List.map (fun q -> q.pr_bits) !states in
+  let closed = ref true in
+  List.iteri (fun i q ->
+    List.iter (fun a ->
+      if not (List.exists (fun t -> t = step q.pr_bits a) values) then
+        closed := false) alpha;
+    progress_maybe progress (fun () -> Printf.sprintf
+      "checking periodic closure: %d/%d states"
+      (i + 1) (List.length !states))) !states;
+  if not !closed then
     failwith "internal error: periodic derivative table is not closed";
-  List.iter (fun q ->
+  progressf progress "replaying periodic state witnesses";
+  List.iteri (fun i q ->
     let replay = List.fold_left step zero q.pr_witness in
     if replay <> q.pr_bits then
-      failwith "internal error: periodic derivative witness does not replay")
+      failwith "internal error: periodic derivative witness does not replay";
+    progress_maybe progress (fun () -> Printf.sprintf
+      "replaying periodic witnesses: %d/%d states"
+      (i + 1) (List.length !states)))
     !states;
+  progressf progress "periodic table verified";
   base, step, !states
 
 let periodic_state_expression alpha initial family q =
@@ -384,16 +439,20 @@ type generic_rw_state = {
   rw_expr : int rewpla;
 }
 
-let normalize_rw r = rewpla_aci_normalize_char (rewpla_paper_normalize_char r)
-let generic_step a r = rewpla_paper_symbol_step_char a r
+let normalize_rw r = rewpla_positive_normalize_char
+  (rewpla_paper_normalize_char r)
+let generic_step a r = rewpla_positive_symbol_step_char a r
 
-let build_generic_rewpla_states alpha initial =
+let build_generic_rewpla_states progress alpha initial =
   let states = ref [{ rw_id = 0; rw_witness = []; rw_expr = normalize_rw initial }] in
   let pending = Queue.create () in
   Queue.add 0 pending;
+  let processed = ref 0 in
   let find r =
     List.find_opt (fun q -> rewpla_eqb_char q.rw_expr r) !states
   in
+  progressf progress
+    "generic REwPLA exploration started (alphabet=%d)" (List.length alpha);
   while not (Queue.is_empty pending) do
     let id = Queue.take pending in
     let q = List.nth !states id in
@@ -408,15 +467,37 @@ let build_generic_rewpla_states alpha initial =
                        rw_witness = q.rw_witness @ [a]; rw_expr = r } in
           states := !states @ [next];
           Queue.add next.rw_id pending) alpha
+    ;
+    incr processed;
+    progress_maybe progress (fun () -> Printf.sprintf
+      "generic exploration: processed=%d discovered=%d pending=%d"
+      !processed (List.length !states) (Queue.length pending))
   done;
+  progressf progress "generic exploration complete: states=%d transitions=%d"
+    (List.length !states) (List.length !states * List.length alpha);
   let values = List.map (fun q -> q.rw_expr) !states in
-  if not (rewpla_paper_states_closedb_char alpha values) then
+  progressf progress "checking generic transition closure";
+  let closed = ref true in
+  List.iteri (fun i q ->
+    List.iter (fun a ->
+      let target = generic_step a q.rw_expr in
+      if not (List.exists (fun t -> rewpla_eqb_char target t) values) then
+        closed := false) alpha;
+    progress_maybe progress (fun () -> Printf.sprintf
+      "checking generic closure: %d/%d states"
+      (i + 1) (List.length !states))) !states;
+  if not !closed then
     failwith "internal error: generic derivative table is not closed";
-  List.iter (fun q ->
+  progressf progress "replaying generic state witnesses";
+  List.iteri (fun i q ->
     if not (rewpla_eqb_char
-      (rewpla_paper_word_step_char q.rw_witness
+      (rewpla_positive_word_step_char q.rw_witness
         (normalize_rw initial)) q.rw_expr) then
-      failwith "internal error: derivative witness does not replay") !states;
+      failwith "internal error: derivative witness does not replay";
+    progress_maybe progress (fun () -> Printf.sprintf
+      "replaying generic witnesses: %d/%d states"
+      (i + 1) (List.length !states))) !states;
+  progressf progress "generic table verified";
   !states
 
 let generic_target states r =
@@ -424,21 +505,27 @@ let generic_target states r =
   | Some q -> q.rw_id
   | None -> failwith "internal error: derivative target was not explored"
 
-let render_generic_rewpla_json input alpha r =
-  let states = build_generic_rewpla_states alpha r in
+let render_generic_rewpla_json progress input alpha r =
+  let states = build_generic_rewpla_states progress alpha r in
   let finals = rw_finals (fun q -> q.rw_id)
     (fun q -> rewpla_nullable_char q.rw_expr) states in
-  let displayed_states = List.map (fun q ->
-    q, rewpla_derivation_word_display_char q.rw_witness r) states in
-  let state_json = List.map (fun (q, display) ->
+  progressf progress "rendering JSON state records";
+  let state_json = List.mapi (fun i q ->
+    progress_maybe progress (fun () -> Printf.sprintf
+      "rendering JSON states: %d/%d" (i + 1) (List.length states));
     Printf.sprintf
       "{\"id\":%d,\"witness\":%s,\"accepting\":%b,\"representative\":%s,\"derivative_regex\":%s,\"normal_form_term_ids\":[]}"
       q.rw_id
       (json_string (rw_word_string q.rw_witness))
-      (rewpla_nullable_char q.rw_expr) (json_string (source_rewpla display))
-      (json_string (source_rewpla display))) displayed_states in
-  let transitions = List.concat_map (fun (q, display) -> List.map (fun a ->
-    let dm, dc = rewpla_derivation_symbol_components_char a display in
+      (rewpla_nullable_char q.rw_expr) (json_string (source_rewpla q.rw_expr))
+      (json_string (source_rewpla q.rw_expr))) states in
+  progressf progress "rendering JSON transitions";
+  let transitions = List.concat_map (fun q ->
+    progress_maybe progress (fun () -> Printf.sprintf
+      "rendering JSON transitions: state %d/%d"
+      (q.rw_id + 1) (List.length states));
+    List.map (fun a ->
+    let dm, dc = rewpla_derivation_symbol_components_char a q.rw_expr in
     let dm = rewpla_derivation_display_normalize_char dm
     and dc = rewpla_derivation_display_normalize_char dc in
     let merged = generic_step a q.rw_expr in
@@ -446,9 +533,9 @@ let render_generic_rewpla_json input alpha r =
       "{\"from\":%d,\"symbol\":%s,\"to\":%d,\"main_derivative\":%s,\"context_derivative\":%s}"
       q.rw_id (json_string (String.make 1 (char_of_code a)))
       (generic_target states merged) (json_string (source_rewpla dm))
-      (json_string (source_rewpla dc))) alpha) displayed_states in
+      (json_string (source_rewpla dc))) alpha) states in
   Printf.sprintf
-    "{\"input\":%s,\"automaton\":\"rewpla\",\"method\":\"checked-normalized-derivatives\",\"state_count\":%d,\"alphabet\":%s,\"initial\":0,\"final_states\":%s,\"states\":[%s],\"transitions\":[%s]}\n"
+    "{\"input\":%s,\"automaton\":\"rewpla\",\"method\":\"proved-positive-congruence-normal-form\",\"state_count\":%d,\"alphabet\":%s,\"initial\":0,\"final_states\":%s,\"states\":[%s],\"transitions\":[%s]}\n"
     (json_string input) (List.length states)
     ("[" ^ String.concat "," (List.map (fun a -> json_string (String.make 1 (char_of_code a))) alpha) ^ "]")
     (json_ints finals) (String.concat "," state_json)
@@ -465,11 +552,15 @@ let periodic_target states bits =
   | Some q -> q.pr_id
   | None -> failwith "internal error: periodic target was not explored"
 
-let render_periodic_rewpla_json input alpha initial family =
-  let base, step, states = build_periodic_states alpha family in
+let render_periodic_rewpla_json progress input alpha initial family =
+  let base, step, states = build_periodic_states progress alpha family in
   let finals = rw_finals (fun q -> q.pr_id)
     (fun q -> List.hd q.pr_bits) states in
+  progressf progress "rendering periodic JSON state records";
   let state_json = List.map (fun q ->
+    progress_maybe progress (fun () -> Printf.sprintf
+      "rendering periodic JSON states: %d/%d"
+      (q.pr_id + 1) (List.length states));
     let residues = true_indices q.pr_bits in
     let expression = periodic_state_expression alpha initial family q in
     Printf.sprintf
@@ -479,7 +570,11 @@ let render_periodic_rewpla_json input alpha initial family =
       (json_string expression) (json_string expression)
       (json_ints residues) (json_string (bit_string q.pr_bits))
       (json_ints residues)) states in
+  progressf progress "rendering periodic JSON transitions";
   let edges = List.concat_map (fun q ->
+    progress_maybe progress (fun () -> Printf.sprintf
+      "rendering periodic JSON transitions: state %d/%d"
+      (q.pr_id + 1) (List.length states));
     List.map (fun a ->
       let target_bits = step q.pr_bits a in
       let main_bits = if a = family.pf_trigger then base
@@ -498,39 +593,58 @@ let render_periodic_rewpla_json input alpha initial family =
       json_string (String.make 1 (char_of_code a))) alpha) ^ "]")
     (json_ints finals) (String.concat "," state_json) (String.concat "," edges)
 
-let render_rewpla_text input alpha r =
+let render_rewpla_text progress input alpha r =
   match detect_periodic_family alpha r with
   | Some family ->
-    let _, step, states = build_periodic_states alpha family in
+    progressf progress "selected verified periodic-family construction";
+    let _, step, states = build_periodic_states progress alpha family in
     let out = Buffer.create 8192 in
     Printf.bprintf out "REwPLA semantic derivative DFA (verified mod %d)\nInput: %s\n"
       family.pf_modulus input;
     render_rw_five_tuple out alpha (List.length states)
       (rw_finals (fun q -> q.pr_id) (fun q -> List.hd q.pr_bits) states);
+    progressf progress "rendering periodic text state records";
     List.iter (fun q ->
+      progress_maybe progress (fun () -> Printf.sprintf
+        "rendering periodic text states: %d/%d"
+        (q.pr_id + 1) (List.length states));
       Printf.bprintf out "  %d: witness=%s continuation=%s final=%b bits=%s residues={%s}\n"
         q.pr_id (rw_word_string q.pr_witness)
         (periodic_state_expression alpha r family q)
         (List.hd q.pr_bits) (bit_string q.pr_bits)
         (String.concat "," (List.map string_of_int (true_indices q.pr_bits)))) states;
     Buffer.add_string out "Transitions:\n";
+    progressf progress "rendering periodic text transitions";
     List.iter (fun q -> List.iter (fun a ->
+      progress_maybe progress (fun () -> Printf.sprintf
+        "rendering periodic text transitions: state %d/%d"
+        (q.pr_id + 1) (List.length states));
       Printf.bprintf out "  %d -%c-> %d\n" q.pr_id (char_of_code a)
         (periodic_target states (step q.pr_bits a))) alpha) states;
     Buffer.contents out
   | None ->
-    let states = build_generic_rewpla_states alpha r in
+    progressf progress "selected generic positive-congruence construction";
+    let states = build_generic_rewpla_states progress alpha r in
     let out = Buffer.create 2048 in
-    Printf.bprintf out "REwPLA checked normalized derivative DFA (syntactic states)\nInput: %s\n" input;
+    Printf.bprintf out "REwPLA derivative DFA (positive-congruence classes)\nInput: %s\n" input;
     render_rw_five_tuple out alpha (List.length states)
       (rw_finals (fun q -> q.rw_id)
          (fun q -> rewpla_nullable_char q.rw_expr) states);
-    List.iter (fun q -> Printf.bprintf out "  %d: witness=%s continuation=%s final=%b\n"
-      q.rw_id (rw_word_string q.rw_witness)
-      (source_rewpla (rewpla_derivation_word_display_char q.rw_witness r))
-      (rewpla_nullable_char q.rw_expr)) states;
+    progressf progress "rendering generic text state records";
+    List.iter (fun q ->
+      progress_maybe progress (fun () -> Printf.sprintf
+        "rendering generic text states: %d/%d"
+        (q.rw_id + 1) (List.length states));
+      Printf.bprintf out "  %d: witness=%s continuation=%s final=%b\n"
+        q.rw_id (rw_word_string q.rw_witness)
+        (source_rewpla q.rw_expr)
+        (rewpla_nullable_char q.rw_expr)) states;
     Buffer.add_string out "Transitions:\n";
+    progressf progress "rendering generic text transitions";
     List.iter (fun q -> List.iter (fun a ->
+      progress_maybe progress (fun () -> Printf.sprintf
+        "rendering generic text transitions: state %d/%d"
+        (q.rw_id + 1) (List.length states));
       Printf.bprintf out "  %d -%c-> %d\n" q.rw_id (char_of_code a)
         (generic_target states (generic_step a q.rw_expr))) alpha) states;
     Buffer.contents out
@@ -540,7 +654,8 @@ type format_choice = Text | Dot | Json
 
 let () =
   let automaton = ref Both and format = ref Text and output = ref None
-      and expression = ref None and alphabet_option = ref None in
+      and expression = ref None and alphabet_option = ref None
+      and show_progress = ref true and progress_interval = ref 5.0 in
   let set_automaton = function
     | "ce" -> automaton := Ce | "quotient" -> automaton := Quotient
     | "both" -> automaton := Both | "rewpla" -> automaton := Rewpla
@@ -553,14 +668,23 @@ let () =
     "--alphabet", Arg.String (fun s -> alphabet_option := Some s),
       "SYMBOLS finite alphabet (required for --automaton rewpla)";
     "--format", Arg.Symbol (["text";"dot";"json"], set_format), " select output format";
+    "--progress", Arg.Set show_progress, " show REwPLA construction progress on stderr (default)";
+    "--no-progress", Arg.Clear show_progress, " disable REwPLA construction progress";
+    "--progress-interval", Arg.Set_float progress_interval,
+      "SECONDS minimum interval between progress updates (default: 5)";
     "-o", Arg.String (fun s -> output := Some s), "FILE write output to FILE"
   ] in
-  let usage = "ccont [--automaton ce|quotient|both|rewpla] [--alphabet SYMBOLS] [--format text|dot|json] [-o FILE] REGEX" in
+  let usage = "ccont [--automaton ce|quotient|both|rewpla] [--alphabet SYMBOLS] [--format text|dot|json] [--no-progress] [--progress-interval SECONDS] [-o FILE] REGEX" in
   try
     Arg.parse specs (fun s -> match !expression with None -> expression := Some s | Some _ -> raise (Arg.Bad "exactly one REGEX is required")) usage;
+    if !progress_interval <= 0.0 then
+      raise (Arg.Bad "--progress-interval must be greater than zero");
     let input = match !expression with Some s -> s | None -> raise (Arg.Bad "REGEX is required") in
+    let progress = make_progress_reporter
+      (!show_progress && !automaton = Rewpla) !progress_interval in
     let body = match !automaton with
       | Rewpla ->
+          progressf progress "parsing REwPLA input";
           let alphabet_text = match !alphabet_option with
             | Some s when String.length s > 0 -> s
             | _ -> raise (Arg.Bad "--alphabet is required for --automaton rewpla") in
@@ -571,13 +695,17 @@ let () =
           let r = parse_rewpla input in
           if not (List.for_all (fun a -> List.mem a alpha) (rewpla_alphabet r)) then
             raise (Arg.Bad "the supplied alphabet does not contain every expression symbol");
+          progressf progress "input parsed; constructing DFA";
           (match !format with
            | Json ->
                (match detect_periodic_family alpha r with
                 | Some family ->
-                    render_periodic_rewpla_json input alpha r family
-                | None -> render_generic_rewpla_json input alpha r)
-           | Text -> render_rewpla_text input alpha r
+                    progressf progress "selected verified periodic-family construction";
+                    render_periodic_rewpla_json progress input alpha r family
+                | None ->
+                    progressf progress "selected generic positive-congruence construction";
+                    render_generic_rewpla_json progress input alpha r)
+           | Text -> render_rewpla_text progress input alpha r
            | Dot -> raise (Arg.Bad "dot output is not yet available for --automaton rewpla"))
       | (Ce | Quotient | Both) as ordinary ->
           let r = parse input in
@@ -601,7 +729,9 @@ let () =
                 | Rewpla -> assert false
               in "digraph ccont {\n  rankdir=LR;\n" ^ graphs ^ "}\n"
     in
-    (match !output with None -> print_string body | Some path -> let ch = open_out path in output_string ch body; close_out ch)
+    progressf progress "writing output (%d bytes)" (String.length body);
+    (match !output with None -> print_string body | Some path -> let ch = open_out path in output_string ch body; close_out ch);
+    progressf progress "done"
   with
   | Parse_error (pos,msg) -> Printf.eprintf "parse error at character %d: %s\n" pos msg; exit 2
   | Arg.Bad msg -> Printf.eprintf "%s\nUsage: %s\n" msg usage; exit 2

@@ -1,6 +1,7 @@
 From Stdlib Require Import Extraction ExtrOcamlBasic ExtrOcamlNatInt.
 From CCont Require Import Syntax Automaton Construction LookaheadSemantics
-  LookaheadDerivatives LookaheadDecision PeriodicAutomaton PeriodicDisplay.
+  LookaheadDerivatives LookaheadDecision PositiveCongruenceNormalization
+  PeriodicAutomaton PeriodicDisplay.
 
 Definition char := nat.
 Definition char_eqb := Nat.eqb.
@@ -42,6 +43,16 @@ Definition rewpla_derivation_word_display_char (w : list char) (r : rewpla_char)
 Definition rewpla_paper_states_closedb_char
     (alphabet : list char) (states : list rewpla_char) :=
   rewpla_paper_states_closedb char_eqb (fun c : char => c)
+    alphabet states.
+Definition rewpla_positive_normalize_char (r : rewpla_char) :=
+  rewpla_positive_normalize char_eqb (fun c : char => c) r.
+Definition rewpla_positive_symbol_step_char (a : char) (r : rewpla_char) :=
+  rewpla_positive_symbol_step char_eqb (fun c : char => c) a r.
+Definition rewpla_positive_word_step_char (w : list char) (r : rewpla_char) :=
+  rewpla_positive_word_step char_eqb (fun c : char => c) w r.
+Definition rewpla_positive_states_closedb_char
+    (alphabet : list char) (states : list rewpla_char) :=
+  rewpla_positive_states_closedb char_eqb (fun c : char => c)
     alphabet states.
 
 (** Generic residue-vector kernel for the periodic-lookahead expression
@@ -95,6 +106,8 @@ Extraction "ccont_core.ml"
   rewpla_normalized_word_step_char rewpla_states_closedb_char
   rewpla_paper_normalize_char rewpla_paper_symbol_step_char
   rewpla_paper_word_step_char rewpla_paper_states_closedb_char
+  rewpla_positive_normalize_char rewpla_positive_symbol_step_char
+  rewpla_positive_word_step_char rewpla_positive_states_closedb_char
   rewpla_derivation_display_normalize_char rewpla_derivation_word_display_char
   rewpla_derivation_symbol_components_char
   periodic_zeros_char periodic_base_char periodic_step_char
