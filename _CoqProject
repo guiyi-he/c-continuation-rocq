@@ -12,6 +12,7 @@ theories/PositiveCongruenceNormalization.v
 theories/SemanticDFA.v
 theories/DerivativeLowerBound.v
 theories/LowerBoundFamily.v
+theories/TightLowerBoundFamily.v
 theories/OrdinaryResiduals.v
 theories/PeriodicAutomaton.v
 theories/PeriodicDisplay.v
