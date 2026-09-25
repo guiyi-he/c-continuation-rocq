@@ -22,6 +22,20 @@ Inductive mm_letter (A : Type) : Type :=
 Arguments MMMain {A} _.
 Arguments MMContext {A} _.
 
+Definition erase_mm_letter {A} (c : mm_letter A) : A :=
+  match c with MMMain a | MMContext a => a end.
+
+Definition erase_mm_word {A} (z : list (mm_letter A)) : word A :=
+  map erase_mm_letter z.
+
+Theorem erase_mm_letter_surjective {A} (a : A) :
+  exists c, erase_mm_letter c = a.
+Proof. now exists (MMMain a). Qed.
+
+Theorem erase_mm_letter_two_components {A} (a : A) :
+  MMMain a <> MMContext a.
+Proof. discriminate. Qed.
+
 Fixpoint mm_symbol_derivative {A} (eqb : A -> A -> bool) (a : A)
     (r : rewpla A) : derivative_pair A :=
   match r with
@@ -101,6 +115,355 @@ Corollary mm_erasure_is_projected_right_ideal {A} eqb
   behavior_erasure (mm_behavior eqb r) w <->
   right_ideal (rewpla_language eqb r) w.
 Proof. apply behavior_erasure_constraint_expansion. Qed.
+
+(** Relabeling both MM copies of [a] by [a] turns the two MM quotients
+    into a nondeterministic union.  Iterating this operator is the semantic
+    powerset/tag-erasure construction; it is deliberately kept distinct
+    from the least-constraint merged quotient. *)
+Definition erased_behavior_symbol_quotient {A} (a : A)
+    (R : constraint_language A) : constraint_language A :=
+  lang_union (main_symbol_quotient a R) (context_symbol_quotient a R).
+
+Definition mm_behavior_symbol_quotient {A} (c : mm_letter A)
+    (R : constraint_language A) : constraint_language A :=
+  match c with
+  | MMMain a => main_symbol_quotient a R
+  | MMContext a => context_symbol_quotient a R
+  end.
+
+Fixpoint mm_behavior_word_quotient {A} (z : list (mm_letter A))
+    (R : constraint_language A) : constraint_language A :=
+  match z with
+  | [] => R
+  | c :: z' => mm_behavior_word_quotient z'
+      (mm_behavior_symbol_quotient c R)
+  end.
+
+Fixpoint erased_behavior_word_quotient {A} (w : word A)
+    (R : constraint_language A) : constraint_language A :=
+  match w with
+  | [] => R
+  | a :: w' => erased_behavior_word_quotient w'
+      (erased_behavior_symbol_quotient a R)
+  end.
+
+Lemma mm_behavior_symbol_quotient_compat {A} c
+    (R S : constraint_language A) :
+  lang_equiv R S ->
+  lang_equiv (mm_behavior_symbol_quotient c R)
+    (mm_behavior_symbol_quotient c S).
+Proof.
+  intro H. destruct c as [a|a]; intros [u v]; simpl.
+  - apply H.
+  - split; intros [Hu HR]; split; [exact Hu| |exact Hu|];
+      [apply (proj1 (H ([], a :: v)))|apply (proj2 (H ([], a :: v)))];
+      exact HR.
+Qed.
+
+Lemma mm_behavior_word_quotient_compat {A} z
+    (R S : constraint_language A) :
+  lang_equiv R S ->
+  lang_equiv (mm_behavior_word_quotient z R)
+    (mm_behavior_word_quotient z S).
+Proof.
+  revert R S. induction z as [|c z IH]; intros R S H; simpl.
+  - exact H.
+  - apply IH, mm_behavior_symbol_quotient_compat. exact H.
+Qed.
+
+Lemma mm_behavior_symbol_quotient_union {A} c
+    (R S : constraint_language A) :
+  lang_equiv (mm_behavior_symbol_quotient c (lang_union R S))
+    (lang_union (mm_behavior_symbol_quotient c R)
+      (mm_behavior_symbol_quotient c S)).
+Proof.
+  destruct c as [a|a]; intros [u v]; simpl; unfold lang_union.
+  - tauto.
+  - split.
+    + intros [Hu [HR|HS]]; [left|right]; now split.
+    + intros [[Hu HR]|[Hu HS]]; split; [assumption|now left|assumption|now right].
+Qed.
+
+Lemma mm_behavior_word_quotient_union {A} z
+    (R S : constraint_language A) :
+  lang_equiv (mm_behavior_word_quotient z (lang_union R S))
+    (lang_union (mm_behavior_word_quotient z R)
+      (mm_behavior_word_quotient z S)).
+Proof.
+  revert R S. induction z as [|c z IH]; intros R S; simpl.
+  - apply lang_equiv_refl.
+  - eapply lang_equiv_trans.
+    + apply mm_behavior_word_quotient_compat.
+      apply mm_behavior_symbol_quotient_union.
+    + apply IH.
+Qed.
+
+(** Exact trace meaning of tag erasure: this is the determinization of the
+    NFA obtained by relabeling both [MMMain a] and [MMContext a] by [a]. *)
+Theorem erased_behavior_word_quotient_trace {A} w
+    (R : constraint_language A) p :
+  erased_behavior_word_quotient w R p <->
+  exists z, erase_mm_word z = w /\ mm_behavior_word_quotient z R p.
+Proof.
+  revert R p. induction w as [|a w IH]; intros R p; simpl.
+  - split.
+    + intro Hp. exists []. now split.
+    + intros [[|c z] [Hz Hp]]; [exact Hp|discriminate].
+  - rewrite IH. split.
+    + intros [z [Hz Hpath]].
+      apply (proj1 (mm_behavior_word_quotient_union z
+        (main_symbol_quotient a R) (context_symbol_quotient a R) p))
+        in Hpath.
+      destruct Hpath as [Hm|Hc].
+      * exists (MMMain a :: z). split.
+        -- simpl. now rewrite Hz.
+        -- exact Hm.
+      * exists (MMContext a :: z). split.
+        -- simpl. now rewrite Hz.
+        -- exact Hc.
+    + intros [[|[b|b] z] [Hz Hpath]]; try discriminate; simpl in Hz.
+      * injection Hz as Hba Hzw. subst b. exists z. split; [exact Hzw|].
+        apply (proj2 (mm_behavior_word_quotient_union z
+          (main_symbol_quotient a R) (context_symbol_quotient a R) p)).
+        now left.
+      * injection Hz as Hba Hzw. subst b. exists z. split; [exact Hzw|].
+        apply (proj2 (mm_behavior_word_quotient_union z
+          (main_symbol_quotient a R) (context_symbol_quotient a R) p)).
+        now right.
+Qed.
+
+(** The published MM derivative-correctness theorem is isolated as an
+    explicit interface.  The comparison below does not postulate it as an
+    axiom: all lifting theorems quantify over this property. *)
+Definition mm_derivative_correct_B {A} (eqb : A -> A -> bool) : Prop :=
+  forall c (r : rewpla A),
+    lang_equiv (mm_behavior eqb (mm_derivative eqb c r))
+      (mm_behavior_symbol_quotient c (mm_behavior eqb r)).
+
+Theorem mm_word_derivative_correct_B {A} (eqb : A -> A -> bool)
+    (Hcorrect : mm_derivative_correct_B eqb) z (r : rewpla A) :
+  lang_equiv (mm_behavior eqb (mm_word_derivative eqb z r))
+    (mm_behavior_word_quotient z (mm_behavior eqb r)).
+Proof.
+  revert r. induction z as [|c z IH]; intro r; simpl.
+  - apply lang_equiv_refl.
+  - eapply lang_equiv_trans.
+    + apply IH.
+    + apply mm_behavior_word_quotient_compat, Hcorrect.
+Qed.
+
+(** Under the published derivative-correctness interface, the semantic
+    erased quotient is exactly the union of behaviors of the reachable MM
+    derivatives whose tagged traces erase to the given untagged word. *)
+Theorem erased_MM_subset_behavior_correct {A}
+    (eqb : A -> A -> bool) (Hcorrect : mm_derivative_correct_B eqb)
+    w (r : rewpla A) p :
+  erased_behavior_word_quotient w (mm_behavior eqb r) p <->
+  exists z, erase_mm_word z = w /\
+    mm_behavior eqb (mm_word_derivative eqb z r) p.
+Proof.
+  rewrite erased_behavior_word_quotient_trace. split.
+  - intros [z [Hz Hquot]]. exists z. split; [exact Hz|].
+    apply (proj2 (mm_word_derivative_correct_B
+      (eqb:=eqb) Hcorrect z r p)).
+    exact Hquot.
+  - intros [z [Hz Hderiv]]. exists z. split; [exact Hz|].
+    apply (proj1 (mm_word_derivative_correct_B
+      (eqb:=eqb) Hcorrect z r p)).
+    exact Hderiv.
+Qed.
+
+Lemma erased_behavior_symbol_quotient_mono {A} a
+    (R S : constraint_language A) :
+  lang_incl R S ->
+  lang_incl (erased_behavior_symbol_quotient a R)
+    (erased_behavior_symbol_quotient a S).
+Proof.
+  intros H [u v] [Hm|Hc]; [left|right].
+  - now apply H.
+  - destruct Hc as [-> Hc]. split; [reflexivity|now apply H].
+Qed.
+
+Lemma erased_behavior_word_quotient_mono {A} w
+    (R S : constraint_language A) :
+  lang_incl R S ->
+  lang_incl (erased_behavior_word_quotient w R)
+    (erased_behavior_word_quotient w S).
+Proof.
+  revert R S. induction w as [|a w IH]; intros R S H; simpl.
+  - exact H.
+  - apply IH, erased_behavior_symbol_quotient_mono. exact H.
+Qed.
+
+(** The component-erasure square is only lax: expanding an exact merged
+    quotient gives a subset of the union of the two MM behavior quotients. *)
+Theorem constraint_expansion_merged_symbol_quotient_lax {A}
+    (eqb : A -> A -> bool)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y)
+    a (R : constraint_language A) :
+  lang_incl
+    (constraint_expansion (pair_language_symbol_quotient eqb a R))
+    (erased_behavior_symbol_quotient a (constraint_expansion R)).
+Proof.
+  intros [u z] [v [Hquot Hvz]].
+  apply (proj1 (pair_symbol_quotient_split
+    eqb eqb_spec a R (u, v))) in Hquot.
+  destruct Hquot as [Hm|[Hu Hc]].
+  - left. exists v. now split.
+  - subst u. right. split; [reflexivity|].
+    exists (a :: v). split; [exact Hc|].
+    change (word_prefix ([a] ++ v) ([a] ++ z)).
+    now apply word_prefix_app_left.
+Qed.
+
+(** The inclusion is strict already at the identity expression.  MM's
+    context quotient of [I = Gamma(1)] loops, whereas the exact quotient of
+    the least pair [(epsilon,epsilon)] is empty. *)
+Theorem constraint_expansion_merged_symbol_quotient_strict {A}
+    (eqb : A -> A -> bool)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y) a :
+  ~ lang_equiv
+      (constraint_expansion
+        (pair_language_symbol_quotient eqb a (@lang_one A)))
+      (erased_behavior_symbol_quotient a
+        (constraint_expansion (@lang_one A))).
+Proof.
+  intro H. specialize (H ([], [])).
+  assert (Hr : erased_behavior_symbol_quotient a
+      (constraint_expansion (@lang_one A)) ([], [])).
+  { right. split; [reflexivity|].
+    exists []. split; [reflexivity|apply word_prefix_nil]. }
+  apply (proj2 H) in Hr.
+  destruct Hr as [v [[p [Hp Hstep]] _]].
+  unfold lang_one in Hp. subst p. discriminate.
+Qed.
+
+Definition component_refinement {A} (R B : constraint_language A) : Prop :=
+  lang_incl (constraint_expansion R) B.
+
+Theorem component_refinement_initial {A} (R : constraint_language A) :
+  component_refinement R (constraint_expansion R).
+Proof. intros p Hp. exact Hp. Qed.
+
+(** This is the genuine one-step simulation theorem.  Its direction is from
+    the exact merged least-constraint state to the tag-erased MM powerset
+    state: MM erasure is an over-approximation. *)
+Theorem component_refinement_step {A}
+    (eqb : A -> A -> bool)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y)
+    a (R B : constraint_language A) :
+  component_refinement R B ->
+  component_refinement
+    (pair_language_symbol_quotient eqb a R)
+    (erased_behavior_symbol_quotient a B).
+Proof.
+  intros H p Hp.
+  apply (erased_behavior_symbol_quotient_mono
+    (a:=a) (R:=constraint_expansion R) (S:=B) H).
+  apply (constraint_expansion_merged_symbol_quotient_lax
+    (eqb:=eqb) eqb_spec (a:=a) (R:=R)). exact Hp.
+Qed.
+
+Theorem component_refinement_preserves_final {A}
+    (R B : constraint_language A) :
+  component_refinement R B -> R ([], []) -> B ([], []).
+Proof.
+  intros H HR. apply H. exists []. split; [exact HR|apply word_prefix_nil].
+Qed.
+
+(** Path-level version of the lax square. *)
+Theorem constraint_expansion_merged_word_quotient_lax {A}
+    (eqb : A -> A -> bool)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y)
+    w (R : constraint_language A) :
+  lang_incl
+    (constraint_expansion (pair_language_word_quotient eqb w R))
+    (erased_behavior_word_quotient w (constraint_expansion R)).
+Proof.
+  revert R. induction w as [|a w IH]; intro R.
+  - intros [u z] [v [[p [Hp Hstep]] Hvz]]. simpl in Hstep.
+    inversion Hstep; subst p. exists v. now split.
+  - intros [u z] [v [Hword Hvz]].
+    assert (Hnested : pair_language_word_quotient eqb w
+        (pair_language_symbol_quotient eqb a R) (u, v)).
+    { apply (proj1 (pair_language_word_quotient_cons
+        eqb a w R (u, v))). exact Hword. }
+    assert (Hexpanded : constraint_expansion
+        (pair_language_word_quotient eqb w
+          (pair_language_symbol_quotient eqb a R)) (u, z)).
+    { exists v. now split. }
+    pose proof (IH (pair_language_symbol_quotient eqb a R)
+      (u, z) Hexpanded) as Hpath.
+    simpl. eapply erased_behavior_word_quotient_mono; [|exact Hpath].
+    apply constraint_expansion_merged_symbol_quotient_lax.
+    exact eqb_spec.
+Qed.
+
+(** Consequently the actual merged construction is a semantic refinement
+    of the tag-erased MM powerset construction, not its quotient. *)
+Theorem merged_trace_refines_erased_MM {A}
+    (eqb : A -> A -> bool) (atom_code : A -> nat)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y)
+    (r : rewpla A) w :
+  lang_incl
+    (constraint_expansion
+      (rewpla_denote eqb
+        (rewpla_positive_word_step eqb atom_code w r)))
+    (erased_behavior_word_quotient w (mm_behavior eqb r)).
+Proof.
+  intros [u z] [v [Hmerged Hvz]].
+  pose proof (rewpla_positive_word_step_correct_M
+    eqb atom_code eqb_spec w r (u, v)) as Hcorrect.
+  apply (proj1 Hcorrect) in Hmerged.
+  apply (constraint_expansion_merged_word_quotient_lax
+    (eqb:=eqb) eqb_spec (w:=w) (R:=rewpla_denote eqb r)).
+  exists v. now split.
+Qed.
+
+(** Syntactic-state formulation of the preceding result.  Its sole premise
+    is MM's published derivative-correctness theorem, represented by the
+    explicit interface [mm_derivative_correct_B]. *)
+Theorem merged_trace_refines_MM_derivatives {A}
+    (eqb : A -> A -> bool) (atom_code : A -> nat)
+    (eqb_spec : forall x y, eqb x y = true <-> x = y)
+    (HMM : mm_derivative_correct_B eqb)
+    (r : rewpla A) w :
+  lang_incl
+    (constraint_expansion
+      (rewpla_denote eqb
+        (rewpla_positive_word_step eqb atom_code w r)))
+    (fun p => exists z, erase_mm_word z = w /\
+      mm_behavior eqb (mm_word_derivative eqb z r) p).
+Proof.
+  intros p Hp.
+  apply (proj1 (erased_MM_subset_behavior_correct
+    (eqb:=eqb) HMM w r p)).
+  eapply (merged_trace_refines_erased_MM
+    eqb atom_code eqb_spec r w).
+  exact Hp.
+Qed.
+
+(** No extensional operation on MM behavior languages can reconstruct the
+    least-constraint semantics for all positive expressions: [Gamma] has
+    already forgotten branchwise nonminimal constraints. *)
+Theorem no_behavior_extensional_recovery :
+  ~ exists recover : constraint_language bool -> constraint_language bool,
+    (forall R S, lang_equiv R S ->
+      lang_equiv (recover R) (recover S)) /\
+    (forall r : rewpla bool,
+      lang_equiv (recover (mm_behavior Bool.eqb r))
+        (rewpla_denote Bool.eqb r)).
+Proof.
+  intros [recover [Hext Hrecover]].
+  pose proof (Hrecover (strict_left false)) as Hl.
+  pose proof (Hrecover (strict_right false true)) as Hr.
+  pose proof (Hext _ _
+    (strict_expansions_equal Bool.eqb false true)) as He.
+  apply (@strict_pair_languages_differ bool Bool.eqb false true).
+  eapply lang_equiv_trans.
+  - apply lang_equiv_sym. exact Hl.
+  - eapply lang_equiv_trans; [exact He|exact Hr].
+Qed.
 
 (** There is, however, a genuine quotient theorem for the *merged*
     positive-congruence construction used by the executable artifact.  This
@@ -542,6 +905,61 @@ Lemma ours_la_transition_representation q :
   ours_la_repr (ours_la_delta q).
 Proof. destruct q; reflexivity. Qed.
 
+(** Relabeling the two MM letters is not enough even if a homomorphism is
+    weakened to an acceptance-preserving forward simulation relation.  The
+    identity expression is the smallest obstruction: MM may consume any
+    context letter while staying in its accepting [epsilon] state, whereas
+    the merged least-constraint step goes to [zero]. *)
+Inductive epsilon_residual_state := EpsResidual | ZeroResidual.
+
+Definition epsilon_residual_repr (q : epsilon_residual_state)
+    : rewpla bool :=
+  match q with EpsResidual => WEps | ZeroResidual => WZero end.
+
+Definition mm_epsilon_delta (q : epsilon_residual_state)
+    (c : mm_letter bool) : epsilon_residual_state :=
+  match q, c with
+  | EpsResidual, MMMain _ => ZeroResidual
+  | EpsResidual, MMContext _ => EpsResidual
+  | ZeroResidual, _ => ZeroResidual
+  end.
+
+Definition merged_epsilon_delta (q : epsilon_residual_state)
+    : epsilon_residual_state :=
+  match q with EpsResidual | ZeroResidual => ZeroResidual end.
+
+Definition epsilon_residual_final (q : epsilon_residual_state) : bool :=
+  match q with EpsResidual => true | ZeroResidual => false end.
+
+Lemma mm_epsilon_transition_representation q c :
+  mm_positive_step c (epsilon_residual_repr q) =
+  epsilon_residual_repr (mm_epsilon_delta q c).
+Proof. destruct q, c; reflexivity. Qed.
+
+Lemma merged_epsilon_transition_representation q a :
+  ours_positive_step a (epsilon_residual_repr q) =
+  epsilon_residual_repr (merged_epsilon_delta q).
+Proof. destruct q, a; reflexivity. Qed.
+
+Definition erased_MM_merged_forward_simulation
+    (R : epsilon_residual_state -> epsilon_residual_state -> Prop) : Prop :=
+  R EpsResidual EpsResidual /\
+  (forall q p, R q p -> epsilon_residual_final q = true ->
+    epsilon_residual_final p = true) /\
+  (forall q p c, R q p ->
+    R (mm_epsilon_delta q c) (merged_epsilon_delta p)).
+
+Theorem no_erased_MM_to_merged_forward_simulation :
+  ~ exists R, erased_MM_merged_forward_simulation R.
+Proof.
+  intros [R [Hinit [Hfinal Hstep]]].
+  pose proof (Hstep EpsResidual EpsResidual
+    (MMContext false) Hinit) as Hcontext.
+  simpl in Hcontext.
+  pose proof (Hfinal EpsResidual ZeroResidual Hcontext eq_refl).
+  discriminate.
+Qed.
+
 (** * A strict state-count example *)
 
 Definition universal_expression : rewpla bool :=
@@ -766,12 +1184,24 @@ Proof.
 Qed.
 
 Print Assumptions behavior_erasure_constraint_expansion.
+Print Assumptions erased_behavior_word_quotient_trace.
+Print Assumptions mm_word_derivative_correct_B.
+Print Assumptions erased_MM_subset_behavior_correct.
+Print Assumptions constraint_expansion_merged_symbol_quotient_lax.
+Print Assumptions constraint_expansion_merged_symbol_quotient_strict.
+Print Assumptions component_refinement_step.
+Print Assumptions component_refinement_preserves_final.
+Print Assumptions constraint_expansion_merged_word_quotient_lax.
+Print Assumptions merged_trace_refines_erased_MM.
+Print Assumptions merged_trace_refines_MM_derivatives.
+Print Assumptions no_behavior_extensional_recovery.
 Print Assumptions merged_semantic_quotient_certificate.
 Print Assumptions ours_vs_merged_syntactic_state_bound.
 Print Assumptions rewpla_lookahead_right_assertion.
 Print Assumptions rewpla_lookahead_star_unfold.
 Print Assumptions rewpla_nested_lookahead_star_collapse.
 Print Assumptions no_la_shared_alphabet_homomorphism.
+Print Assumptions no_erased_MM_to_merged_forward_simulation.
 Print Assumptions mm_universal_three_distinct_classes.
 Print Assumptions mm_universal_three_distinct_behaviors.
 Print Assumptions mm_universal_quotient_exactly_three.
