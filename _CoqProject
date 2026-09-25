@@ -10,6 +10,7 @@ theories/LookaheadDecision.v
 theories/PositiveCongruence.v
 theories/PositiveCongruenceNormalization.v
 theories/SemanticDFA.v
+theories/MiyazakiMinamideComparison.v
 theories/DerivativeLowerBound.v
 theories/LowerBoundFamily.v
 theories/TightLowerBoundFamily.v

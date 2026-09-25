@@ -14,6 +14,7 @@ all:
 	$(ROCQ) theories/PositiveCongruence.v
 	$(ROCQ) theories/PositiveCongruenceNormalization.v
 	$(ROCQ) theories/SemanticDFA.v
+	$(ROCQ) theories/MiyazakiMinamideComparison.v
 	$(ROCQ) theories/DerivativeLowerBound.v
 	$(ROCQ) theories/LowerBoundFamily.v
 	$(ROCQ) theories/TightLowerBoundFamily.v
@@ -79,4 +80,4 @@ test: cli
 
 clean:
 	opam exec -- dune clean
-	rocq clean -Q theories CCont theories/StringConstraints.v theories/Syntax.v theories/OrdinaryDerivatives.v theories/LookaheadSemantics.v theories/ConstraintExpansion.v theories/LookaheadDerivatives.v theories/PaperGuards.v theories/LookaheadDecision.v theories/PositiveCongruence.v theories/PositiveCongruenceNormalization.v theories/SemanticDFA.v theories/DerivativeLowerBound.v theories/LowerBoundFamily.v theories/TightLowerBoundFamily.v theories/OrdinaryResiduals.v theories/PeriodicAutomaton.v theories/PeriodicDisplay.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v
+	rocq clean -Q theories CCont theories/StringConstraints.v theories/Syntax.v theories/OrdinaryDerivatives.v theories/LookaheadSemantics.v theories/ConstraintExpansion.v theories/LookaheadDerivatives.v theories/PaperGuards.v theories/LookaheadDecision.v theories/PositiveCongruence.v theories/PositiveCongruenceNormalization.v theories/SemanticDFA.v theories/MiyazakiMinamideComparison.v theories/DerivativeLowerBound.v theories/LowerBoundFamily.v theories/TightLowerBoundFamily.v theories/OrdinaryResiduals.v theories/PeriodicAutomaton.v theories/PeriodicDisplay.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v
