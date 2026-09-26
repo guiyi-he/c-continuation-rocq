@@ -3,6 +3,7 @@ theories/StringConstraints.v
 theories/Syntax.v
 theories/OrdinaryDerivatives.v
 theories/LookaheadSemantics.v
+theories/DistanceBenchmark.v
 theories/ConstraintExpansion.v
 theories/LookaheadDerivatives.v
 theories/PaperGuards.v

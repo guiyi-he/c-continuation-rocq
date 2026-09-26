@@ -1,12 +1,13 @@
 ROCQ=rocq compile -Q theories CCont
 
-.PHONY: all cli test clean
+.PHONY: all cli test cpp cpp-test cpp-differential cpp-regex-differential cpp-alignment cpp-distance-bench cpp-suite-smoke cpp-suite cpp-redos-bench-smoke cpp-redos-bench cpp-evaluation-smoke cpp-evaluation clean
 
 all:
 	$(ROCQ) theories/StringConstraints.v
 	$(ROCQ) theories/Syntax.v
 	$(ROCQ) theories/OrdinaryDerivatives.v
 	$(ROCQ) theories/LookaheadSemantics.v
+	$(ROCQ) theories/DistanceBenchmark.v
 	$(ROCQ) theories/ConstraintExpansion.v
 	$(ROCQ) theories/LookaheadDerivatives.v
 	$(ROCQ) theories/PaperGuards.v
@@ -85,6 +86,45 @@ test: cli
 	python tests/positive_quotient.py _build/positive_congruence_rewpla.txt
 	@if opam exec -- dune exec ccont -- "(a+b" >/dev/null 2>&1; then exit 1; else true; fi
 
+# The experimental solver is deliberately optional: the Rocq/OCaml targets
+# above do not depend on a C++ toolchain and retain their existing behavior.
+cpp:
+	$(MAKE) -C cpp
+
+cpp-test:
+	$(MAKE) -C cpp test
+
+cpp-differential:
+	$(MAKE) -C cpp differential
+
+cpp-regex-differential:
+	$(MAKE) -C cpp regex-differential
+
+cpp-alignment:
+	$(MAKE) -C cpp alignment
+
+cpp-distance-bench:
+	$(MAKE) -C cpp distance-bench
+
+cpp-suite-smoke:
+	$(MAKE) -C cpp suite-smoke
+
+cpp-suite:
+	$(MAKE) -C cpp suite
+
+cpp-redos-bench-smoke:
+	$(MAKE) -C cpp redos-bench-smoke
+
+cpp-redos-bench:
+	$(MAKE) -C cpp redos-bench
+
+cpp-evaluation-smoke:
+	$(MAKE) -C cpp evaluation-smoke
+
+cpp-evaluation:
+	$(MAKE) -C cpp evaluation
+
 clean:
+	$(MAKE) -C cpp clean
 	opam exec -- dune clean
-	rocq clean -Q theories CCont theories/StringConstraints.v theories/Syntax.v theories/OrdinaryDerivatives.v theories/LookaheadSemantics.v theories/ConstraintExpansion.v theories/LookaheadDerivatives.v theories/PaperGuards.v theories/LookaheadDecision.v theories/PositiveCongruence.v theories/PositiveCongruenceNormalization.v theories/SemanticDFA.v theories/MiyazakiMinamideComparison.v theories/DerivativeLowerBound.v theories/LowerBoundFamily.v theories/TightLowerBoundFamily.v theories/TightAutomaton.v theories/OrdinaryResiduals.v theories/PeriodicAutomaton.v theories/PeriodicDisplay.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v
+	rocq clean -Q theories CCont theories/StringConstraints.v theories/Syntax.v theories/OrdinaryDerivatives.v theories/LookaheadSemantics.v theories/DistanceBenchmark.v theories/ConstraintExpansion.v theories/LookaheadDerivatives.v theories/PaperGuards.v theories/LookaheadDecision.v theories/PositiveCongruence.v theories/PositiveCongruenceNormalization.v theories/SemanticDFA.v theories/MiyazakiMinamideComparison.v theories/DerivativeLowerBound.v theories/LowerBoundFamily.v theories/TightLowerBoundFamily.v theories/TightAutomaton.v theories/OrdinaryResiduals.v theories/PeriodicAutomaton.v theories/PeriodicDisplay.v theories/Automaton.v theories/Construction.v theories/Canonical.v theories/Correctness.v theories/Extraction.v theories/Examples.v

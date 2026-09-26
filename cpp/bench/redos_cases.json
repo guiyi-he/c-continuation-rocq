@@ -1,0 +1,57 @@
+[
+  {
+    "name": "nested_plus_overlap",
+    "category": "nested-unbounded-quantifier",
+    "alphabet": "a!",
+    "lookahead": "a+!",
+    "left": "a+",
+    "right": "aa+",
+    "reject": "!",
+    "control_body": "a+",
+    "rationale": "Two unbounded branches accept the same nonempty pump while the successful assertion sees the failing suffix."
+  },
+  {
+    "name": "class_prefix_overlap",
+    "category": "character-class-prefix",
+    "alphabet": "ab!",
+    "lookahead": "[ab]+!",
+    "left": "[ab]+",
+    "right": "a[ab]*",
+    "reject": "!",
+    "control_body": "[ab]+",
+    "rationale": "A broad character-class branch overlaps a constrained-prefix branch."
+  },
+  {
+    "name": "optional_suffix_overlap",
+    "category": "optional-suffix",
+    "alphabet": "ab#",
+    "lookahead": "a+#",
+    "left": "a+b?",
+    "right": "a+",
+    "reject": "#",
+    "control_body": "a+",
+    "rationale": "An optional branch suffix creates overlap without relying on a character class."
+  },
+  {
+    "name": "fixed_word_overlap",
+    "category": "fixed-word-equivalent-branches",
+    "alphabet": "ab!",
+    "lookahead": "(?:ab)+!",
+    "left": "a+b",
+    "right": "aa*b",
+    "reject": "!",
+    "control_body": "(?:ab)+",
+    "rationale": "Distinct ordinary syntax accepts a shared fixed pump word, isolating repeated branch choice from assertion cost."
+  },
+  {
+    "name": "bounded_repeat_overlap",
+    "category": "bounded-repeat",
+    "alphabet": "a!",
+    "lookahead": "a+!",
+    "left": "a{1,3}",
+    "right": "a{2,4}",
+    "reject": "!",
+    "control_body": "a+",
+    "rationale": "Overlapping bounded quantifiers test the real frontend's counted-repeat translation."
+  }
+]

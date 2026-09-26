@@ -13,5 +13,6 @@
     "**/Makefile.conf": true,
     "**/Makefile.coq": true,
     "**/Makefile.coq.conf": true
-  }
+  },
+  "cmake.sourceDirectory": "C:/Users/ASUS/Desktop/c-continuation automaton/cpp"
 }

@@ -1,4 +1,8 @@
 _build/
+cpp/build/
+cpp/build-cmake/
+__pycache__/
+*.py[cod]
 .lia.cache
 *.vo
 *.vos

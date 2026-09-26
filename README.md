@@ -23,11 +23,52 @@ opam switch active:
 make          # check the Rocq development and regenerate extracted OCaml
 make cli      # also build the command-line tool
 make test     # run proof, example, and CLI regression checks
+make cpp-test # build and test the independent experimental C++ solver
 ```
 
 `make clean` removes generated build products. The checked-in
 [`derivative_dfa.txt`](derivative_dfa.txt) is an example output, not a build
 prerequisite.
+
+## Experimental C++ solver
+
+The independent C++17 implementation under [`cpp/`](cpp/) decides
+nonemptiness for one REwPLA projected language or for the intersection of
+several such languages. Its core is a partial-derivative NFA, an on-the-fly
+product search, and shortest-witness reconstruction. It does not link against
+or replace the extracted OCaml implementation.
+
+```sh
+make cpp-test
+./cpp/build/rewpla-solver --alphabet ab 'LA(a)a'
+./cpp/build/rewpla-solver --alphabet ab '(a+b)*a' 'b*a'
+make cpp-differential  # compare results with the extracted OCaml DFA
+make cpp-alignment     # larger fixed-seed Rocq/OCaml alignment suite
+make cpp-distance-bench
+make cpp-suite-smoke   # validate the paper-oriented benchmark matrix
+make cpp-regex-differential
+make cpp-redos-bench-smoke # bounded defensive ReDoS case study
+make cpp-evaluation-smoke  # logs + CSV + manifest + Markdown summary
+make cpp-evaluation        # full repeated publication-oriented profile
+```
+
+The C++ solver uses the paper's projected pair-language semantics: a positive
+lookahead contributes its least required continuation to the projected word.
+For example, `LA(a)` has witness `a`, while `LA(a)b` is empty when `a` and `b`
+are distinct. See [`cpp/ALGORITHM.md`](cpp/ALGORITHM.md) for the direct mapping
+to the paper equations and Rocq definitions. Resource bounds produce an
+explicit `RESOURCE_LIMIT` result and are never reported as `UNSAT`.
+The optional real-regex frontend translates a fail-closed positive-lookahead
+fragment into the same projected semantics. A separate bounded ReDoS case
+study generates worst-case branch-overlap witnesses and probes a standard
+engine in timeout-isolated subprocesses; it is a research measurement tool,
+not a scanner or exploit facility.
+The paper-oriented benchmark matrix, native `distance_n` family, ablations,
+metrics, and measurement protocol are specified in
+[`cpp/EXPERIMENTS.md`](cpp/EXPERIMENTS.md).
+The benchmark's projected-language characterization and even/odd
+satisfiability criterion are proved in
+[`theories/DistanceBenchmark.v`](theories/DistanceBenchmark.v).
 
 ## Command-line interface
 
@@ -159,5 +200,6 @@ construction.
 - `theories/`: Rocq development and extraction entry point.
 - `extracted/`: generated OCaml interface and core.
 - `cli/`: command-line application and unit tests.
+- `cpp/`: independent experimental C++ REwPLA nonemptiness solver.
 - `tests/`: expected outputs and regression checks.
 - `_CoqProject` and `Makefile`: project configuration and reproducible commands.
