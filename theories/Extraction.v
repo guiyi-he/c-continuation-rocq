@@ -1,7 +1,7 @@
 From Stdlib Require Import Extraction ExtrOcamlBasic ExtrOcamlNatInt.
 From CCont Require Import Syntax Automaton Construction LookaheadSemantics
   LookaheadDerivatives LookaheadDecision PositiveCongruenceNormalization
-  PeriodicAutomaton PeriodicDisplay.
+  PeriodicAutomaton PeriodicDisplay TightAutomaton TightLowerBoundFamily.
 
 Definition char := nat.
 Definition char_eqb := Nat.eqb.
@@ -71,6 +71,13 @@ Definition periodic_history_representative_char (sigma : regex char)
     (w : list char) :=
   @PeriodicDisplay.representative char char_eqb sigma trigger initial periods w.
 
+(** Certified phase/obligation kernel for the tight lower-bound witness. *)
+Definition tight_initial_char := TightAutomaton.initial.
+Definition tight_step_char := TightAutomaton.step.
+Definition tight_finalb_char := TightAutomaton.finalb.
+Definition tight_state_eqb_char := TightAutomaton.state_eqb.
+Definition tight_states_closedb_char := TightAutomaton.states_closedb.
+
 (** Certified modulo-15 representatives are proved over the finite two-letter
     type [bool].  Translate each atom to the corresponding CLI character;
     this changes only the symbol representation, not the REwPLA constructors. *)
@@ -113,6 +120,8 @@ Extraction "ccont_core.ml"
   periodic_zeros_char periodic_base_char periodic_step_char
   periodic_parameters_validb_char periodic_states_closedb_char
   periodic_history_representative_char
+  tight_initial_char tight_step_char tight_finalb_char tight_state_eqb_char
+  tight_states_closedb_char
   requested_representative_char requested_debug_representative_char
   Mod15Example.requested_derivative_debug_states
   Mod15Example.residue_state_count

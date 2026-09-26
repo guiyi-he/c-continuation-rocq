@@ -128,6 +128,31 @@ example, so its state count need not match an anchored formulation or another
 choice of state representatives. Run `make test` to check the example together
 with the rest of the project.
 
+### Tight lower-bound family
+
+The CLI recognizes the formally verified tight-family shape
+
+```text
+U* a e* (b + c LA((U^k)* x))* d U* h,
+U = a+b+c+d+e+x,  k >= 2.
+```
+
+For this family it uses the extracted phase/obligation automaton instead of
+expanding `U^k` into generic positive-congruence normal forms. For example,
+the `k=4` instance can be generated with:
+
+```sh
+opam exec -- dune exec ccont -- --automaton rewpla --alphabet abcdexh \
+  --format text -o ./tight-k4.txt \
+  '(a+b+c+d+e+x)*ae*(b+cLA(((a+b+c+d+e+x)(a+b+c+d+e+x)(a+b+c+d+e+x)(a+b+c+d+e+x))*x))*d(a+b+c+d+e+x)*h'
+```
+
+The output identifies the method as `verified-tight-phase-obligations`. The
+current reachable table has 3,026 states for `k=4`; its transition closure and
+the replay of every state witness are checked before the file is written.
+Expressions outside this exact family continue to use the generic verified
+construction.
+
 ## Repository map
 
 - `paper/`: paper sources.

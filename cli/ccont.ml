@@ -356,6 +356,155 @@ let detect_periodic_family alpha r =
       else None
   | _ -> None
 
+type tight_family = {
+  tf_k : int;
+  tf_a : int;
+  tf_b : int;
+  tf_c : int;
+  tf_d : int;
+  tf_e : int;
+  tf_x : int;
+  tf_hash : int;
+}
+
+let same_atom_set expected r =
+  match union_atoms r with
+  | Some atoms ->
+      List.length atoms = List.length expected &&
+      List.sort_uniq compare atoms = List.sort_uniq compare expected
+  | None -> false
+
+let tight_period_size core = function
+  | WStar block ->
+      let factors = concat_factors block in
+      if factors <> [] && List.for_all (same_atom_set core) factors
+      then Some (List.length factors) else None
+  | _ -> None
+
+let detect_tight_family alpha r =
+  match concat_factors r with
+  | [WStar outer_left; WAtom a; WStar (WAtom e); WStar factor;
+     WAtom d; WStar outer_right; WAtom hash] ->
+      let assertion = match factor with
+        | WPlus (WAtom b, WConcat (WAtom c,
+            WLookahead (WConcat (period, WAtom x)))) ->
+              Some (b, c, period, x)
+        | WPlus (WConcat (WAtom c,
+            WLookahead (WConcat (period, WAtom x))), WAtom b) ->
+              Some (b, c, period, x)
+        | _ -> None
+      in
+      (match assertion with
+       | None -> None
+       | Some (b, c, period, x) ->
+           let core = [a; b; c; d; e; x] in
+           let roles = core @ [hash] in
+           if List.length (List.sort_uniq compare roles) <> 7 ||
+              List.sort_uniq compare alpha <> List.sort_uniq compare roles ||
+              not (same_atom_set core outer_left) ||
+              not (same_atom_set core outer_right)
+           then None
+           else
+             match tight_period_size core period with
+             | Some k when k >= 2 ->
+                 Some { tf_k = k; tf_a = a; tf_b = b; tf_c = c;
+                        tf_d = d; tf_e = e; tf_x = x; tf_hash = hash }
+             | _ -> None)
+  | _ -> None
+
+let tight_symbol family a =
+  if a = family.tf_a then TLa
+  else if a = family.tf_b then TLb
+  else if a = family.tf_c then TLc
+  else if a = family.tf_d then TLd
+  else if a = family.tf_e then TLe
+  else if a = family.tf_x then TLx
+  else if a = family.tf_hash then TLhash
+  else failwith "internal error: symbol outside tight-family alphabet"
+
+type tight_rw_state = {
+  tr_id : int;
+  tr_witness : int list;
+  tr_state : TightAutomaton.state;
+}
+
+module TightStateTable = Hashtbl.Make(struct
+  type t = TightAutomaton.state
+  let equal = tight_state_eqb_char
+  let hash = Hashtbl.hash
+end)
+
+let build_tight_states progress alpha family =
+  let step state a =
+    tight_step_char family.tf_k state (tight_symbol family a) in
+  let by_state = TightStateTable.create 4096 in
+  let by_id = Hashtbl.create 4096 in
+  let pending = Queue.create () in
+  let initial = { tr_id = 0; tr_witness = []; tr_state = tight_initial_char } in
+  TightStateTable.add by_state initial.tr_state initial;
+  Hashtbl.add by_id 0 initial;
+  Queue.add initial pending;
+  let discovered = ref 1 and processed = ref 0 in
+  progressf progress
+    "tight-family exploration started (k=%d, alphabet=%d)"
+    family.tf_k (List.length alpha);
+  while not (Queue.is_empty pending) do
+    let q = Queue.take pending in
+    List.iter (fun a ->
+      let state = step q.tr_state a in
+      if not (TightStateTable.mem by_state state) then begin
+        let next = { tr_id = !discovered;
+                     tr_witness = q.tr_witness @ [a]; tr_state = state } in
+        incr discovered;
+        TightStateTable.add by_state state next;
+        Hashtbl.add by_id next.tr_id next;
+        Queue.add next pending
+      end) alpha;
+    incr processed;
+    progress_maybe progress (fun () -> Printf.sprintf
+      "tight exploration: processed=%d discovered=%d pending=%d"
+      !processed !discovered (Queue.length pending))
+  done;
+  let states = List.init !discovered (fun id -> Hashtbl.find by_id id) in
+  progressf progress "tight exploration complete: states=%d transitions=%d"
+    !discovered (!discovered * List.length alpha);
+  progressf progress "checking tight transition closure";
+  let symbols = List.map (tight_symbol family) alpha in
+  let values = List.map (fun q -> q.tr_state) states in
+  if not (tight_states_closedb_char family.tf_k symbols values) then
+    failwith "internal error: tight-family derivative table is not closed";
+  progressf progress "replaying tight state witnesses";
+  List.iteri (fun i q ->
+    let replay = List.fold_left step tight_initial_char q.tr_witness in
+    if not (tight_state_eqb_char replay q.tr_state) then
+      failwith "internal error: tight-family witness does not replay";
+    progress_maybe progress (fun () -> Printf.sprintf
+      "replaying tight witnesses: %d/%d" (i + 1) (List.length states)))
+    states;
+  progressf progress "tight table verified";
+  step, states
+
+let tight_target states state =
+  match List.find_opt (fun q -> tight_state_eqb_char q.tr_state state) states with
+  | Some q -> q.tr_id
+  | None -> failwith "internal error: tight-family target was not explored"
+
+let tight_bit_string bits =
+  String.concat "" (List.map (fun b -> if b then "1" else "0") bits)
+
+let tight_partial_string = function
+  | TightAutomaton.PartialNone -> "none"
+  | TightAutomaton.PartialPadding -> "padding"
+  | TightAutomaton.PartialBits bits -> "bits:" ^ tight_bit_string bits
+
+let tight_state_string = function
+  | TightAutomaton.Running (partial, family) ->
+      Printf.sprintf "running(partial=%s,family={%s})"
+        (tight_partial_string partial)
+        (String.concat ";" (List.map tight_bit_string family))
+  | TightAutomaton.Accepting -> "accepting"
+  | TightAutomaton.Dead -> "dead"
+
 type periodic_rw_state = {
   pr_id : int;
   pr_witness : int list;
@@ -505,6 +654,55 @@ let generic_target states r =
   | Some q -> q.rw_id
   | None -> failwith "internal error: derivative target was not explored"
 
+let render_tight_rewpla_json progress input alpha family =
+  let step, states = build_tight_states progress alpha family in
+  let finals = rw_finals (fun q -> q.tr_id)
+    (fun q -> tight_finalb_char q.tr_state) states in
+  progressf progress "rendering tight JSON state records";
+  let state_json = List.mapi (fun i q ->
+    progress_maybe progress (fun () -> Printf.sprintf
+      "rendering tight JSON states: %d/%d" (i + 1) (List.length states));
+    let representative = tight_state_string q.tr_state in
+    Printf.sprintf
+      "{\"id\":%d,\"witness\":%s,\"accepting\":%b,\"representative\":%s,\"derivative_regex\":%s,\"normal_form_term_ids\":[]}"
+      q.tr_id (json_string (rw_word_string q.tr_witness))
+      (tight_finalb_char q.tr_state) (json_string representative)
+      (json_string representative)) states in
+  progressf progress "rendering tight JSON transitions";
+  let edges = List.concat_map (fun q ->
+    List.map (fun a -> Printf.sprintf
+      "{\"from\":%d,\"symbol\":%s,\"to\":%d}"
+      q.tr_id (json_string (String.make 1 (char_of_code a)))
+      (tight_target states (step q.tr_state a))) alpha) states in
+  Printf.sprintf
+    "{\"input\":%s,\"automaton\":\"rewpla\",\"method\":\"verified-tight-phase-obligations\",\"k\":%d,\"state_count\":%d,\"alphabet\":%s,\"initial\":0,\"final_states\":%s,\"states\":[%s],\"transitions\":[%s]}\n"
+    (json_string input) family.tf_k (List.length states)
+    ("[" ^ String.concat "," (List.map (fun a ->
+      json_string (String.make 1 (char_of_code a))) alpha) ^ "]")
+    (json_ints finals) (String.concat "," state_json) (String.concat "," edges)
+
+let render_tight_rewpla_text progress input alpha family =
+  progressf progress "selected verified tight-family construction";
+  let step, states = build_tight_states progress alpha family in
+  let out = Buffer.create 8192 in
+  Printf.bprintf out
+    "REwPLA semantic DFA (verified tight phase/obligation construction, k=%d)\nInput: %s\n"
+    family.tf_k input;
+  render_rw_five_tuple out alpha (List.length states)
+    (rw_finals (fun q -> q.tr_id)
+       (fun q -> tight_finalb_char q.tr_state) states);
+  progressf progress "rendering tight text state records";
+  List.iter (fun q ->
+    Printf.bprintf out "  %d: witness=%s state=%s final=%b\n"
+      q.tr_id (rw_word_string q.tr_witness) (tight_state_string q.tr_state)
+      (tight_finalb_char q.tr_state)) states;
+  Buffer.add_string out "Transitions:\n";
+  progressf progress "rendering tight text transitions";
+  List.iter (fun q -> List.iter (fun a ->
+    Printf.bprintf out "  %d -%c-> %d\n" q.tr_id (char_of_code a)
+      (tight_target states (step q.tr_state a))) alpha) states;
+  Buffer.contents out
+
 let render_generic_rewpla_json progress input alpha r =
   let states = build_generic_rewpla_states progress alpha r in
   let finals = rw_finals (fun q -> q.rw_id)
@@ -594,7 +792,9 @@ let render_periodic_rewpla_json progress input alpha initial family =
     (json_ints finals) (String.concat "," state_json) (String.concat "," edges)
 
 let render_rewpla_text progress input alpha r =
-  match detect_periodic_family alpha r with
+  match detect_tight_family alpha r with
+  | Some family -> render_tight_rewpla_text progress input alpha family
+  | None -> match detect_periodic_family alpha r with
   | Some family ->
     progressf progress "selected verified periodic-family construction";
     let _, step, states = build_periodic_states progress alpha family in
@@ -698,13 +898,18 @@ let () =
           progressf progress "input parsed; constructing DFA";
           (match !format with
            | Json ->
-               (match detect_periodic_family alpha r with
+               (match detect_tight_family alpha r with
                 | Some family ->
-                    progressf progress "selected verified periodic-family construction";
-                    render_periodic_rewpla_json progress input alpha r family
+                    progressf progress "selected verified tight-family construction";
+                    render_tight_rewpla_json progress input alpha family
                 | None ->
-                    progressf progress "selected generic positive-congruence construction";
-                    render_generic_rewpla_json progress input alpha r)
+                    match detect_periodic_family alpha r with
+                    | Some family ->
+                        progressf progress "selected verified periodic-family construction";
+                        render_periodic_rewpla_json progress input alpha r family
+                    | None ->
+                        progressf progress "selected generic positive-congruence construction";
+                        render_generic_rewpla_json progress input alpha r)
            | Text -> render_rewpla_text progress input alpha r
            | Dot -> raise (Arg.Bad "dot output is not yet available for --automaton rewpla"))
       | (Ce | Quotient | Both) as ordinary ->

@@ -212,5 +212,12 @@ let () =
     List.iter (fun a ->
       assert (periodic_step_char 97 dynamic_base replay a =
         Mod15Example.residue_step replay (a = 97))) [97;98]) debug_states;
+  let tight_accepts k w = tight_finalb_char
+    (List.fold_left (tight_step_char k) tight_initial_char w) in
+  assert (tight_accepts 2 [TLa; TLd; TLhash]);
+  assert (tight_accepts 2 [TLa; TLb; TLd; TLhash]);
+  assert (tight_accepts 2 [TLa; TLc; TLd; TLe; TLx; TLhash]);
+  assert (not (tight_accepts 2 [TLa; TLc; TLd; TLx; TLhash]));
+  assert (not (tight_accepts 2 [TLa; TLd]));
   Printf.printf "checked %d expressions and %d words: OK\n"
     (List.length expressions) (List.length ws)

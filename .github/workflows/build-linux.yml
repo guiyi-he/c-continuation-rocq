@@ -61,8 +61,6 @@ jobs:
           tar -C dist/package -czf dist/ccont-linux-x86_64.tar.gz ccont
           sha256sum dist/ccont-linux-x86_64.tar.gz > dist/ccont-linux-x86_64.tar.gz.sha256
 
-      # Keep CI verification small.  The large expression is intended to run
-      # later on the user's server and is deliberately not evaluated here.
       - name: Smoke-test packaged executable
         shell: bash
         run: |
@@ -74,6 +72,14 @@ jobs:
             -o dist/smoke-test.txt \
             'LA(a)+a'
           test -s dist/smoke-test.txt
+          dist/package/ccont \
+            --automaton rewpla \
+            --alphabet abcdexh \
+            --format text \
+            -o dist/tight-k4-smoke.txt \
+            '(a+b+c+d+e+x)*ae*(b+cLA(((a+b+c+d+e+x)(a+b+c+d+e+x)(a+b+c+d+e+x)(a+b+c+d+e+x))*x))*d(a+b+c+d+e+x)*h'
+          grep -q 'verified tight phase/obligation construction, k=4' dist/tight-k4-smoke.txt
+          grep -q 'States: 3026' dist/tight-k4-smoke.txt
 
       - name: Upload Linux release
         uses: actions/upload-artifact@v4

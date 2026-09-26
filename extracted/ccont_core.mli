@@ -500,6 +500,84 @@ module DerivationDisplay :
     rewpla
  end
 
+type tight_symbol =
+| TLa
+| TLb
+| TLc
+| TLd
+| TLe
+| TLx
+| TLhash
+
+module TightAutomaton :
+ sig
+  type bitvec = bool list
+
+  type family = bitvec list
+
+  val bitvec_eqb : bitvec -> bitvec -> bool
+
+  val bitvec_subsetb : bitvec -> bitvec -> bool
+
+  val bitvec_strict_subsetb : bitvec -> bitvec -> bool
+
+  val all_bitvecs : int -> bitvec list
+
+  val family_normalize : int -> family -> family
+
+  val bitvec_update : int -> bool -> bitvec -> bitvec
+
+  val bitvec_set : int -> bitvec -> bitvec
+
+  val bitvec_clear : int -> bitvec -> bitvec
+
+  val zero_bits : int -> bitvec
+
+  val rotate_bits : bitvec -> bitvec
+
+  val family_add : int -> bitvec -> bitvec list -> family
+
+  val advance_obligations : tight_symbol -> bitvec -> bitvec
+
+  val advance_family : int -> tight_symbol -> bitvec list -> family
+
+  type partial_state =
+  | PartialNone
+  | PartialPadding
+  | PartialBits of bitvec
+
+  val partial_step : int -> partial_state -> tight_symbol -> partial_state
+
+  val completion_obligation : int -> partial_state -> bitvec option
+
+  val completed_step :
+    int -> partial_state -> bitvec list -> tight_symbol -> family
+
+  type state =
+  | Running of partial_state * family
+  | Accepting
+  | Dead
+
+  val initial : state
+
+  val finalb : state -> bool
+
+  val family_has_empty : int -> bitvec list -> bool
+
+  val step_running :
+    int -> partial_state -> bitvec list -> tight_symbol -> state
+
+  val step : int -> state -> tight_symbol -> state
+
+  val partial_state_eqb : partial_state -> partial_state -> bool
+
+  val family_eqb : family -> family -> bool
+
+  val state_eqb : state -> state -> bool
+
+  val states_closedb : int -> tight_symbol list -> state list -> bool
+ end
+
 type char = int
 
 val char_eqb : int -> int -> bool
@@ -573,6 +651,19 @@ val periodic_step_char :
 
 val periodic_history_representative_char :
   char regex -> char -> rewpla_char -> int list -> char list -> char rewpla
+
+val tight_initial_char : TightAutomaton.state
+
+val tight_step_char :
+  int -> TightAutomaton.state -> tight_symbol -> TightAutomaton.state
+
+val tight_finalb_char : TightAutomaton.state -> bool
+
+val tight_state_eqb_char :
+  TightAutomaton.state -> TightAutomaton.state -> bool
+
+val tight_states_closedb_char :
+  int -> tight_symbol list -> TightAutomaton.state list -> bool
 
 val bool_rewpla_to_char : bool rewpla -> rewpla_char
 
